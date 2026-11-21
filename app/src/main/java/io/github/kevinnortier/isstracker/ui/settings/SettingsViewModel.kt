@@ -9,6 +9,7 @@ import io.github.kevinnortier.isstracker.IssTrackerApp
 import io.github.kevinnortier.isstracker.data.settings.AppSettings
 import io.github.kevinnortier.isstracker.data.settings.LocationInput
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
+import io.github.kevinnortier.isstracker.data.settings.NotifyTrigger
 import io.github.kevinnortier.isstracker.data.settings.SavedLocation
 import io.github.kevinnortier.isstracker.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,6 +60,14 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
 
     fun setMinElevation(degrees: Double) {
         viewModelScope.launch { repository.setMinElevation(degrees) }
+    }
+
+    fun setNotifyTrigger(trigger: NotifyTrigger) {
+        viewModelScope.launch { repository.setNotifyTrigger(trigger) }
+    }
+
+    fun setNotifyLeadMinutes(minutes: Int) {
+        viewModelScope.launch { repository.setNotifyLeadMinutes(minutes) }
     }
 
     fun updateForm(

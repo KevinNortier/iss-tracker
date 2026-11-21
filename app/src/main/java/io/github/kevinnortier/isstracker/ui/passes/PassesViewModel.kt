@@ -8,6 +8,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.kevinnortier.isstracker.AppContainer
 import io.github.kevinnortier.isstracker.IssTrackerApp
 import io.github.kevinnortier.isstracker.data.settings.resolveObserver
+import io.github.kevinnortier.isstracker.notify.PassKey
+import io.github.kevinnortier.isstracker.notify.matchPass
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import io.github.kevinnortier.isstracker.orbit.LookAngles
 import io.github.kevinnortier.isstracker.orbit.Pass
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -52,8 +55,12 @@ data class PassesUiState(
     val currentLook: LookAngles? = null,
     val minElevationDeg: Double = 0.0,
     val tleEpoch: Instant? = null,
+    /** Passes (from [passes]) that have a reminder turned on. */
+    val reminders: Set<Pass> = emptySet(),
     val now: Instant = Instant.EPOCH,
-)
+) {
+    fun hasReminder(pass: Pass): Boolean = pass in reminders
+}
 
 /** Passes that haven't ended at a moment, and which of them is in progress / next. */
 data class PassSelection(val upcoming: List<Pass>, val current: Pass?, val next: Pass?)
@@ -137,9 +144,11 @@ class PassesViewModel(
         .flowOn(Dispatchers.Default)
         .onStart { emit(Prediction.Waiting) }
 
+    private val selectedPasses = container.settingsRepository.selectedPasses
+
     val uiState: StateFlow<PassesUiState> = combine(
-        prediction, tle, tleFailure, secondTicker(clock),
-    ) { prediction, cached, tleFailure, now ->
+        prediction, tle, tleFailure, selectedPasses, secondTicker(clock),
+    ) { prediction, cached, tleFailure, selected, now ->
         val base = PassesUiState(satelliteName = container.satellite.displayName, tleEpoch = cached?.tle?.epoch, now = now)
         when (prediction) {
             Prediction.Waiting -> if (tleFailure != null && cached == null) {
@@ -160,6 +169,7 @@ class PassesViewModel(
                         runCatching { prediction.predictor.lookAngles(now) }.getOrNull()
                     },
                     minElevationDeg = prediction.minElevationDeg,
+                    reminders = selected.mapNotNull { matchPass(it, selection.upcoming) }.toSet(),
                 )
             }
         }
@@ -168,6 +178,22 @@ class PassesViewModel(
         SharingStarted.WhileSubscribed(5_000),
         PassesUiState(satelliteName = container.satellite.displayName),
     )
+
+    /** Turns the reminder for [pass] on or off. */
+    fun toggleReminder(pass: Pass) {
+        viewModelScope.launch {
+            val key = PassKey.of(container.satellite.noradId, pass)
+            val existing = container.settingsRepository.selectedPasses.first().firstOrNull { matchPass(it, listOf(pass)) != null }
+            if (existing != null) {
+                container.settingsRepository.setPassSelected(existing, false)
+                container.reminderScheduler.reschedule()
+            } else {
+                container.settingsRepository.setPassSelected(key, true)
+                // If the reminder time has already passed, show it right away.
+                container.reminderScheduler.reschedule(showLateNow = setOf(key))
+            }
+        }
+    }
 
     init {
         viewModelScope.launch {

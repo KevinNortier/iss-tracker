@@ -6,12 +6,16 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 import java.time.Instant
@@ -35,6 +39,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val FIX_PROVIDER = stringPreferencesKey("fix_provider")
 
         val MIN_ELEVATION = doublePreferencesKey("min_elevation_deg")
+
+        val NOTIFY_TRIGGER = stringPreferencesKey("notify_trigger")
+        val NOTIFY_LEAD = intPreferencesKey("notify_lead_min")
+        val NOTIFY_PASSES = stringSetPreferencesKey("notify_passes")
+        val SCHEDULED_REMINDERS = stringSetPreferencesKey("scheduled_reminders")
     }
 
     val settings: Flow<AppSettings> = dataStore.data
@@ -71,6 +80,40 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[Keys.MIN_ELEVATION] = degrees }
     }
 
+    suspend fun setNotifyTrigger(trigger: NotifyTrigger) {
+        dataStore.edit { it[Keys.NOTIFY_TRIGGER] = trigger.name }
+    }
+
+    suspend fun setNotifyLeadMinutes(minutes: Int) {
+        require(minutes in 0..180) { "Lead time must be between 0 and 180 minutes" }
+        dataStore.edit { it[Keys.NOTIFY_LEAD] = minutes }
+    }
+
+    /** Passes the user wants a reminder for. */
+    val selectedPasses: Flow<Set<PassKey>> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs[Keys.NOTIFY_PASSES].orEmpty().mapNotNull(PassKey::decode).toSet() }
+        .distinctUntilChanged()
+
+    suspend fun setPassSelected(key: PassKey, selected: Boolean) {
+        dataStore.edit {
+            val current = it[Keys.NOTIFY_PASSES].orEmpty()
+            it[Keys.NOTIFY_PASSES] = if (selected) current + key.encode() else current - key.encode()
+        }
+    }
+
+    suspend fun setSelectedPasses(keys: Set<PassKey>) {
+        dataStore.edit { it[Keys.NOTIFY_PASSES] = keys.map(PassKey::encode).toSet() }
+    }
+
+    /** Reminders that currently have an alarm set (so they can be cancelled later). */
+    suspend fun scheduledReminders(): Set<PassKey> =
+        dataStore.data.first()[Keys.SCHEDULED_REMINDERS].orEmpty().mapNotNull(PassKey::decode).toSet()
+
+    suspend fun setScheduledReminders(keys: Set<PassKey>) {
+        dataStore.edit { it[Keys.SCHEDULED_REMINDERS] = keys.map(PassKey::encode).toSet() }
+    }
+
     private fun Preferences.toSettings(): AppSettings {
         val mode = this[Keys.LOCATION_MODE]
             ?.let { name -> LocationMode.entries.firstOrNull { it.name == name } }
@@ -95,11 +138,18 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val minElevation = this[Keys.MIN_ELEVATION]?.takeIf { it in 0.0..45.0 }
             ?: AppSettings.DEFAULT_MIN_ELEVATION_DEG
 
+        val trigger = this[Keys.NOTIFY_TRIGGER]
+            ?.let { name -> NotifyTrigger.entries.firstOrNull { it.name == name } }
+            ?: NotifyTrigger.RISE
+        val lead = this[Keys.NOTIFY_LEAD]?.takeIf { it in 0..180 } ?: AppSettings.DEFAULT_NOTIFY_LEAD_MINUTES
+
         return AppSettings(
             locationMode = mode,
             savedLocation = saved,
             lastFix = fix,
             minElevationDeg = minElevation,
+            notifyTrigger = trigger,
+            notifyLeadMinutes = lead,
         )
     }
 

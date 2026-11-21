@@ -1,6 +1,7 @@
 package io.github.kevinnortier.isstracker.data.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,42 @@ class SettingsRepositoryTest {
     @Test(expected = IllegalArgumentException::class)
     fun `minimum elevation outside 0 to 45 is rejected`() {
         runBlocking { newRepository().setMinElevation(60.0) }
+    }
+
+    @Test
+    fun `reminder settings default to rise and 15 minutes`() = runBlocking {
+        val repo = newRepository()
+        val s = repo.settings.first()
+        assertEquals(NotifyTrigger.RISE, s.notifyTrigger)
+        assertEquals(15, s.notifyLeadMinutes)
+        repo.setNotifyTrigger(NotifyTrigger.APEX)
+        repo.setNotifyLeadMinutes(30)
+        val changed = repo.settings.first()
+        assertEquals(NotifyTrigger.APEX, changed.notifyTrigger)
+        assertEquals(30, changed.notifyLeadMinutes)
+    }
+
+    @Test
+    fun `selected passes can be added, removed and replaced`() = runBlocking {
+        val repo = newRepository()
+        val a = PassKey(25544, 1_000L)
+        val b = PassKey(25544, 2_000L)
+        assertEquals(emptySet<PassKey>(), repo.selectedPasses.first())
+        repo.setPassSelected(a, true)
+        repo.setPassSelected(b, true)
+        assertEquals(setOf(a, b), repo.selectedPasses.first())
+        repo.setPassSelected(a, false)
+        assertEquals(setOf(b), repo.selectedPasses.first())
+        repo.setSelectedPasses(setOf(a))
+        assertEquals(setOf(a), repo.selectedPasses.first())
+    }
+
+    @Test
+    fun `scheduled reminders are remembered`() = runBlocking {
+        val repo = newRepository()
+        val keys = setOf(PassKey(25544, 5_000L))
+        repo.setScheduledReminders(keys)
+        assertEquals(keys, repo.scheduledReminders())
     }
 
     @Test

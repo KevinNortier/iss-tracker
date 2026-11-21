@@ -2,6 +2,7 @@ package io.github.kevinnortier.isstracker.ui.passes
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -23,6 +26,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -30,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -38,9 +43,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.location.LocationPermission
+import io.github.kevinnortier.isstracker.notify.ReminderNotifications
 import io.github.kevinnortier.isstracker.orbit.Pass
 import io.github.kevinnortier.isstracker.ui.DetailRow
 import io.github.kevinnortier.isstracker.ui.Format
+import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
 import io.github.kevinnortier.isstracker.ui.location.LocationAutoRefresh
 import io.github.kevinnortier.isstracker.ui.location.LocationCard
 import io.github.kevinnortier.isstracker.ui.location.LocationUiState
@@ -61,6 +68,19 @@ fun PassesRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val location by locationViewModel.uiState.collectAsStateWithLifecycle()
     LocationAutoRefresh(locationViewModel)
+
+    val context = LocalContext.current
+    val notifications = rememberNotificationPermissionRequester()
+    val onToggleReminder: (Pass) -> Unit = { pass ->
+        if (state.hasReminder(pass)) {
+            viewModel.toggleReminder(pass)
+        } else {
+            notifications.runWithPermission { viewModel.toggleReminder(pass) }
+        }
+    }
+    // Reminders are on but can't be shown: tell the user how to fix it.
+    val notificationsBlocked = notifications.denied ||
+        (state.reminders.isNotEmpty() && !ReminderNotifications.canNotify(context))
 
     val zone = ZoneId.systemDefault()
     val today = state.now.atZone(zone).toLocalDate()
@@ -100,8 +120,14 @@ fun PassesRoute(
                     Text(state.error!!, color = MaterialTheme.colorScheme.error)
                 }
                 state.hasObserver -> {
+                    if (notificationsBlocked) {
+                        item(key = "notifications-blocked") {
+                            NotificationsBlockedCard(onOpenSettings = notifications::openSystemSettings)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
                     item(key = "headline") {
-                        HeadlineCard(state, onOpenLive)
+                        HeadlineCard(state, onOpenLive, onToggleReminder)
                         Spacer(Modifier.height(8.dp))
                     }
                     if (state.passes.isEmpty()) {
@@ -119,7 +145,12 @@ fun PassesRoute(
                             )
                         }
                         items(passes, key = { "pass-${it.rise.time.toEpochMilli()}" }) { pass ->
-                            PassRow(pass, highlighted = pass == state.current)
+                            PassRow(
+                                pass = pass,
+                                highlighted = pass == state.current,
+                                reminderOn = state.hasReminder(pass),
+                                onToggleReminder = { onToggleReminder(pass) },
+                            )
                         }
                     }
                     item(key = "footer") {
@@ -135,7 +166,24 @@ private fun LocationUiState.permissionNeedsAttention(): Boolean =
     mode == LocationMode.CURRENT && permission == LocationPermission.NONE
 
 @Composable
-private fun HeadlineCard(state: PassesUiState, onOpenLive: () -> Unit) {
+private fun NotificationsBlockedCard(onOpenSettings: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                "Notifications are turned off for ISS Tracker, so pass reminders can't be shown.",
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenSettings) { Text("Notification settings") }
+        }
+    }
+}
+
+@Composable
+private fun HeadlineCard(state: PassesUiState, onOpenLive: () -> Unit, onToggleReminder: (Pass) -> Unit) {
     val current = state.current
     val next = state.next
     Card(
@@ -155,7 +203,21 @@ private fun HeadlineCard(state: PassesUiState, onOpenLive: () -> Unit) {
                 else -> Text("No upcoming passes.")
             }
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onOpenLive) { Text("Live position") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpenLive) { Text("Live position") }
+                if (current == null && next != null) {
+                    val on = state.hasReminder(next)
+                    OutlinedButton(onClick = { onToggleReminder(next) }) {
+                        Icon(
+                            if (on) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Text(if (on) "Reminder on" else "Remind me")
+                    }
+                }
+            }
         }
     }
 }
@@ -235,13 +297,14 @@ private fun VisibleIcon() {
 }
 
 @Composable
-private fun PassRow(pass: Pass, highlighted: Boolean) {
+private fun PassRow(pass: Pass, highlighted: Boolean, reminderOn: Boolean, onToggleReminder: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
+            .semantics {
                 contentDescription = "Pass from ${Format.time(pass.rise.time)} to ${Format.time(pass.set.time)}, " +
-                    "highest ${Format.degrees0(pass.apex.elevationDeg)}" + if (pass.visible) ", visible" else ""
+                    "highest ${Format.degrees0(pass.apex.elevationDeg)}" + (if (pass.visible) ", visible" else "") +
+                    if (reminderOn) ", reminder on" else ""
             },
         colors = CardDefaults.cardColors(
             containerColor = if (highlighted) {
@@ -280,6 +343,13 @@ private fun PassRow(pass: Pass, highlighted: Boolean) {
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text("max", style = MaterialTheme.typography.bodySmall)
+            }
+            IconButton(onClick = onToggleReminder) {
+                Icon(
+                    if (reminderOn) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                    contentDescription = if (reminderOn) "Turn off reminder" else "Remind me about this pass",
+                    tint = if (reminderOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

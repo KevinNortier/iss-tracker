@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,6 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kevinnortier.isstracker.data.settings.AppSettings
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
+import io.github.kevinnortier.isstracker.data.settings.NotifyTrigger
+import io.github.kevinnortier.isstracker.notify.ReminderNotifications
+import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
 import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
 
 @Composable
@@ -56,6 +60,8 @@ fun SettingsRoute(
         onBack = onBack,
         onLocationModeChange = viewModel::setLocationMode,
         onMinElevationChange = viewModel::setMinElevation,
+        onNotifyTriggerChange = viewModel::setNotifyTrigger,
+        onNotifyLeadChange = viewModel::setNotifyLeadMinutes,
         onNameChange = { viewModel.updateForm(name = it) },
         onLatitudeChange = { viewModel.updateForm(latitude = it) },
         onLongitudeChange = { viewModel.updateForm(longitude = it) },
@@ -72,6 +78,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onLocationModeChange: (LocationMode) -> Unit,
     onMinElevationChange: (Double) -> Unit,
+    onNotifyTriggerChange: (NotifyTrigger) -> Unit,
+    onNotifyLeadChange: (Int) -> Unit,
     onNameChange: (String) -> Unit,
     onLatitudeChange: (String) -> Unit,
     onLongitudeChange: (String) -> Unit,
@@ -150,7 +158,71 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            HorizontalDivider()
+
+            NotificationSettings(
+                trigger = state.settings.notifyTrigger,
+                leadMinutes = state.settings.notifyLeadMinutes,
+                onTriggerChange = onNotifyTriggerChange,
+                onLeadChange = onNotifyLeadChange,
+            )
         }
+    }
+}
+
+@Composable
+private fun NotificationSettings(
+    trigger: NotifyTrigger,
+    leadMinutes: Int,
+    onTriggerChange: (NotifyTrigger) -> Unit,
+    onLeadChange: (Int) -> Unit,
+) {
+    val context = LocalContext.current
+    val notifications = rememberNotificationPermissionRequester()
+
+    Text("Reminders", style = MaterialTheme.typography.titleLarge)
+    Text(
+        "Tap the bell on a pass to get a reminder before it.",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text("Remind me before", style = MaterialTheme.typography.bodyLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = trigger == NotifyTrigger.RISE,
+            onClick = { onTriggerChange(NotifyTrigger.RISE) },
+            label = { Text("It rises") },
+        )
+        FilterChip(
+            selected = trigger == NotifyTrigger.APEX,
+            onClick = { onTriggerChange(NotifyTrigger.APEX) },
+            label = { Text("It is highest") },
+        )
+    }
+    Text("How long before", style = MaterialTheme.typography.bodyLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AppSettings.NOTIFY_LEAD_CHOICES.forEach { minutes ->
+            FilterChip(
+                selected = leadMinutes == minutes,
+                onClick = { onLeadChange(minutes) },
+                label = { Text("$minutes min") },
+            )
+        }
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { notifications.runWithPermission { ReminderNotifications.showTest(context) } }) {
+            Text("Send test notification")
+        }
+        if (notifications.denied) {
+            OutlinedButton(onClick = notifications::openSystemSettings) { Text("Notification settings") }
+        }
+    }
+    if (notifications.denied) {
+        Text(
+            "Notifications are turned off for ISS Tracker.",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -249,6 +321,8 @@ private fun SettingsScreenPreview() {
             onBack = {},
             onLocationModeChange = {},
             onMinElevationChange = {},
+            onNotifyTriggerChange = {},
+            onNotifyLeadChange = {},
             onNameChange = {},
             onLatitudeChange = {},
             onLongitudeChange = {},
