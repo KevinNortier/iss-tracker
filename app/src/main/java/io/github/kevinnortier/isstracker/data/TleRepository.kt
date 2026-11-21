@@ -4,6 +4,11 @@ import io.github.kevinnortier.isstracker.orbit.Tle
 import io.github.kevinnortier.isstracker.orbit.TleParseException
 import io.github.kevinnortier.isstracker.orbit.TleParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -58,6 +63,16 @@ class TleRepository(
 
     private val mutex = Mutex()
 
+    /** The most recently loaded TLE per satellite, so all screens see a refresh made by any of them. */
+    private val latest = MutableStateFlow<Map<Int, CachedTle>>(emptyMap())
+
+    /** Emits the latest loaded TLE for [noradId] (null until [getTle] or [getCached] has loaded one). */
+    fun latest(noradId: Int): Flow<CachedTle?> = latest.map { it[noradId] }.distinctUntilChanged()
+
+    private fun publish(noradId: Int, cached: CachedTle) {
+        latest.update { it + (noradId to cached) }
+    }
+
     /**
      * Returns the TLE for [noradId], downloading a new one if the cache is missing or older than
      * [REFRESH_AFTER]. With [forceRefresh] it downloads if the cache is older than [MIN_REFRESH_INTERVAL].
@@ -65,7 +80,10 @@ class TleRepository(
      * If the download fails but a cached TLE exists, the cached one is returned together with the error.
      * Throws [NoTleAvailableException] if there is neither a cached TLE nor a successful download.
      */
-    suspend fun getTle(noradId: Int, forceRefresh: Boolean = false): TleLoadResult = mutex.withLock {
+    suspend fun getTle(noradId: Int, forceRefresh: Boolean = false): TleLoadResult =
+        load(noradId, forceRefresh).also { publish(noradId, it.cached) }
+
+    private suspend fun load(noradId: Int, forceRefresh: Boolean): TleLoadResult = mutex.withLock {
         val cached = readCache(noradId)
         // Millisecond precision, the same as what the cache file stores.
         val now = clock.instant().truncatedTo(ChronoUnit.MILLIS)
@@ -90,7 +108,8 @@ class TleRepository(
     }
 
     /** Returns the cached TLE without downloading, or null if there is none. */
-    suspend fun getCached(noradId: Int): CachedTle? = mutex.withLock { readCache(noradId) }
+    suspend fun getCached(noradId: Int): CachedTle? =
+        mutex.withLock { readCache(noradId) }?.also { publish(noradId, it) }
 
     private suspend fun downloadAndParse(noradId: Int): Tle {
         val text = downloader.download(noradId)

@@ -73,6 +73,19 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `minimum elevation defaults to zero and can be changed`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(0.0, repo.settings.first().minElevationDeg, 0.0)
+        repo.setMinElevation(10.0)
+        assertEquals(10.0, repo.settings.first().minElevationDeg, 0.0)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `minimum elevation outside 0 to 45 is rejected`() {
+        runBlocking { newRepository().setMinElevation(60.0) }
+    }
+
+    @Test
     fun `settings survive a restart`() {
         runBlocking { newRepository().setLocationMode(LocationMode.SAVED) }
         scope.cancel() // close the first DataStore before opening the file again

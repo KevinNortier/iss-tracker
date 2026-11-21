@@ -33,6 +33,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val FIX_ACCURACY = floatPreferencesKey("fix_accuracy_m")
         val FIX_TIME = longPreferencesKey("fix_time_ms")
         val FIX_PROVIDER = stringPreferencesKey("fix_provider")
+
+        val MIN_ELEVATION = doublePreferencesKey("min_elevation_deg")
     }
 
     val settings: Flow<AppSettings> = dataStore.data
@@ -64,6 +66,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    suspend fun setMinElevation(degrees: Double) {
+        require(degrees in 0.0..45.0) { "Minimum elevation must be between 0 and 45 degrees" }
+        dataStore.edit { it[Keys.MIN_ELEVATION] = degrees }
+    }
+
     private fun Preferences.toSettings(): AppSettings {
         val mode = this[Keys.LOCATION_MODE]
             ?.let { name -> LocationMode.entries.firstOrNull { it.name == name } }
@@ -85,7 +92,15 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             null
         }
 
-        return AppSettings(locationMode = mode, savedLocation = saved, lastFix = fix)
+        val minElevation = this[Keys.MIN_ELEVATION]?.takeIf { it in 0.0..45.0 }
+            ?: AppSettings.DEFAULT_MIN_ELEVATION_DEG
+
+        return AppSettings(
+            locationMode = mode,
+            savedLocation = saved,
+            lastFix = fix,
+            minElevationDeg = minElevation,
+        )
     }
 
     private fun location(lat: Double?, lon: Double?, alt: Double?): GeodeticLocation? {

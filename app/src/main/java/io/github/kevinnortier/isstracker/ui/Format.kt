@@ -2,6 +2,7 @@ package io.github.kevinnortier.isstracker.ui
 
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -17,6 +18,47 @@ object Format {
     )
 
     private val DATE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ROOT)
+    private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
+    private val TIME_SECONDS: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT)
+    private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)
+
+    /** 24 h clock time, e.g. "21:14". */
+    fun time(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String = TIME.format(instant.atZone(zone))
+
+    /** 24 h clock time with seconds, e.g. "21:14:05". */
+    fun timeWithSeconds(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
+        TIME_SECONDS.format(instant.atZone(zone))
+
+    /** Day heading: "Today", "Tomorrow" or e.g. "Monday 24 November". */
+    fun day(date: LocalDate, today: LocalDate): String = when (date) {
+        today -> "Today"
+        today.plusDays(1) -> "Tomorrow"
+        else -> DAY.format(date)
+    }
+
+    /** Whole degrees, e.g. "45°" (used in lists). */
+    fun degrees0(value: Double): String = "${value.roundToInt()}°"
+
+    /** Countdown: "1 h 05 min" for an hour or more, otherwise "mm:ss". */
+    fun countdown(d: Duration): String {
+        val totalSeconds = d.seconds.coerceAtLeast(0)
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format(Locale.ROOT, "%d h %02d min", hours, minutes)
+        } else {
+            String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    /** Pass length, e.g. "6 min 30 s". */
+    fun passDuration(d: Duration): String {
+        val totalSeconds = d.seconds.coerceAtLeast(0)
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return if (minutes > 0) "$minutes min $seconds s" else "$seconds s"
+    }
 
     /** 16-point compass direction for an azimuth in degrees, e.g. 135 → "SE". */
     fun compassPoint(azimuthDeg: Double): String {

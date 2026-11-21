@@ -65,6 +65,24 @@ class LocationInputTest {
     }
 
     @Test
+    fun `formats coordinates without scientific notation`() {
+        assertEquals("-0.0005", LocationInput.formatForInput(-0.0005))
+        assertEquals("0.00001", LocationInput.formatForInput(0.00001))
+        assertEquals("51.4769", LocationInput.formatForInput(51.4769))
+        assertEquals("12", LocationInput.formatForInput(12.0))
+        assertEquals("0", LocationInput.formatForInput(-0.0000001))
+        assertEquals("46", LocationInput.formatForInput(46.4, maxDecimals = 0))
+        assertEquals("59.12346", LocationInput.formatForInput(59.123456, maxDecimals = 5))
+    }
+
+    @Test
+    fun `formatted values parse back to the same location`() {
+        val text = LocationInput.formatForInput(-0.0005)
+        val loc = (LocationInput.parse("51.4769", text, "") as LocationInput.Result.Valid).location
+        assertEquals(-0.0005, loc.longitudeDeg, 1e-12)
+    }
+
+    @Test
     fun `only the bad field gets an error`() {
         val e = errors("45", "200")
         assertNull(e.latitude)

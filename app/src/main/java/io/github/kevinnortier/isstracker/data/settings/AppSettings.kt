@@ -24,7 +24,14 @@ data class AppSettings(
     val savedLocation: SavedLocation? = null,
     /** The most recent fix from location services, kept so the app can start without waiting for GPS. */
     val lastFix: LocationFix? = null,
-)
+    /** A pass only counts while the satellite is at least this high above the horizon. */
+    val minElevationDeg: Double = DEFAULT_MIN_ELEVATION_DEG,
+) {
+    companion object {
+        const val DEFAULT_MIN_ELEVATION_DEG = 0.0
+        val MIN_ELEVATION_CHOICES = listOf(0.0, 5.0, 10.0, 20.0)
+    }
+}
 
 /** The observer position the app should use right now, and where it came from. */
 sealed interface Observer {

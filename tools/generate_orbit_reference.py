@@ -120,6 +120,28 @@ def main() -> None:
     out.append("        val sunlit: Boolean,")
     out.append("    )")
     out.append("")
+    out.append("    class PassCase(")
+    out.append("        val tle: String,")
+    out.append("        val latitudeDeg: Double,")
+    out.append("        val longitudeDeg: Double,")
+    out.append("        val altitudeMeters: Double,")
+    out.append("        val minElevationDeg: Double,")
+    out.append("        val fromMillis: Long,")
+    out.append("        val untilMillis: Long,")
+    out.append("        val passes: List<PassRef>,")
+    out.append("    )")
+    out.append("")
+    out.append("    /** rise/apex/set epochMillis (UTC), apex elevation (deg), rise/set azimuth (deg), visible to the eye */")
+    out.append("    class PassRef(")
+    out.append("        val riseMillis: Long,")
+    out.append("        val apexMillis: Long,")
+    out.append("        val setMillis: Long,")
+    out.append("        val apexElevationDeg: Double,")
+    out.append("        val riseAzimuthDeg: Double,")
+    out.append("        val setAzimuthDeg: Double,")
+    out.append("        val visible: Boolean,")
+    out.append("    )")
+    out.append("")
     out.append("    /** epochMillis (UTC), sun azimuth (deg), sun elevation (deg) */")
     out.append("    class SunSample(val epochMillis: Long, val azimuthDeg: Double, val elevationDeg: Double)")
     out.append("")
@@ -186,6 +208,60 @@ def main() -> None:
     out.append("    )")
     out.append("")
 
+    # --- Passes (Skyfield find_events) --------------------------------------------
+    out.append("    val passCases: List<PassCase> = listOf(")
+    for obs_name, (lat, lon, alt) in OBSERVERS.items():
+        topos = wgs84.latlon(lat, lon, elevation_m=alt)
+        observer_at = earth + topos
+        for min_el in (0.0, 10.0):
+            from_ms = start_ms
+            until_ms = start_ms + 3 * 86_400_000
+            t0 = ts.from_datetime(_utc(from_ms))
+            t1 = ts.from_datetime(_utc(until_ms))
+            times, events = iss.find_events(topos, t0, t1, altitude_degrees=min_el)
+            out.append("        PassCase(")
+            out.append("            tle = \"ISS_25544\",")
+            out.append(f"            latitudeDeg = {kt_double(lat)},")
+            out.append(f"            longitudeDeg = {kt_double(lon)},")
+            out.append(f"            altitudeMeters = {kt_double(alt)},")
+            out.append(f"            minElevationDeg = {kt_double(min_el)},")
+            out.append(f"            fromMillis = {from_ms}L,")
+            out.append(f"            untilMillis = {until_ms}L,")
+            out.append("            passes = listOf(")
+            i = 0
+            evs = list(zip(times, events))
+            while i + 2 < len(evs) + 0:
+                (tr, er), (tc, ec), (tset, es) = evs[i], evs[i + 1], evs[i + 2]
+                if (er, ec, es) != (0, 1, 2):
+                    i += 1
+                    continue
+                diff = iss - topos
+                apex_alt, _, _ = diff.at(tc).altaz()
+                _, rise_az, _ = diff.at(tr).altaz()
+                _, set_az, _ = diff.at(tset).altaz()
+                # Visible: some 10 s sample with ISS above max(min_el, 0), sunlit, and sun below -6 deg.
+                visible = False
+                rise_ms = _ms(tr)
+                set_ms = _ms(tset)
+                for ms in range(rise_ms, set_ms + 1, 10_000):
+                    t = ts.from_datetime(_utc(ms))
+                    a, _, _ = diff.at(t).altaz()
+                    if a.degrees < max(min_el, 0.0):
+                        continue
+                    sun_alt, _, _ = observer_at.at(t).observe(sun).apparent().altaz()
+                    if sun_alt.degrees < -6.0 and iss.at(t).is_sunlit(eph):
+                        visible = True
+                        break
+                out.append(
+                    f"                PassRef({rise_ms}L, {_ms(tc)}L, {set_ms}L, {kt_double(apex_alt.degrees)}, "
+                    f"{kt_double(rise_az.degrees)}, {kt_double(set_az.degrees)}, {str(visible).lower()}),"
+                )
+                i += 3
+            out.append("            ),")
+            out.append("        ),")
+    out.append("    )")
+    out.append("")
+
     # --- Sun position ------------------------------------------------------------
     lat, lon, alt = OBSERVERS["GREENWICH"]
     observer = earth + wgs84.latlon(lat, lon, elevation_m=alt)
@@ -208,6 +284,11 @@ def main() -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(out), encoding="utf-8")
     print(f"Wrote {target}")
+
+
+def _ms(t) -> int:
+    """Skyfield Time -> epoch milliseconds (UTC)."""
+    return int(round(t.utc_datetime().timestamp() * 1000.0))
 
 
 def _utc(ms: int):

@@ -1,6 +1,8 @@
 package io.github.kevinnortier.isstracker.data.settings
 
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /** Validates a location typed in by the user. */
 object LocationInput {
@@ -52,6 +54,17 @@ object LocationInput {
             Result.Invalid(errors)
         }
     }
+
+    /**
+     * Formats a coordinate for an input field: plain decimal notation (never "5.0E-4"),
+     * at most [maxDecimals] decimals, no trailing zeros.
+     */
+    fun formatForInput(value: Double, maxDecimals: Int = 6): String =
+        BigDecimal.valueOf(value)
+            .setScale(maxDecimals, RoundingMode.HALF_UP)
+            .stripTrailingZeros()
+            .let { if (it.signum() == 0) BigDecimal.ZERO else it }
+            .toPlainString()
 
     private fun number(text: String): Double? =
         text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() }

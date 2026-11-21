@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 /** The text fields for entering a saved location. */
 data class SavedLocationForm(
@@ -58,6 +57,10 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         viewModelScope.launch { repository.setLocationMode(mode) }
     }
 
+    fun setMinElevation(degrees: Double) {
+        viewModelScope.launch { repository.setMinElevation(degrees) }
+    }
+
     fun updateForm(
         name: String = form.value.name,
         latitude: String = form.value.latitude,
@@ -87,9 +90,9 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         val fix = uiState.value.settings.lastFix ?: return
         form.update {
             it.copy(
-                latitude = String.format(Locale.ROOT, "%.5f", fix.location.latitudeDeg),
-                longitude = String.format(Locale.ROOT, "%.5f", fix.location.longitudeDeg),
-                altitude = String.format(Locale.ROOT, "%.0f", fix.location.altitudeMeters),
+                latitude = LocationInput.formatForInput(fix.location.latitudeDeg, maxDecimals = 5),
+                longitude = LocationInput.formatForInput(fix.location.longitudeDeg, maxDecimals = 5),
+                altitude = LocationInput.formatForInput(fix.location.altitudeMeters, maxDecimals = 0),
                 errors = LocationInput.Errors(),
                 message = null,
             )
@@ -111,9 +114,9 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
 
     private fun SavedLocation.toForm() = SavedLocationForm(
         name = name,
-        latitude = location.latitudeDeg.toString(),
-        longitude = location.longitudeDeg.toString(),
-        altitude = String.format(Locale.ROOT, "%.0f", location.altitudeMeters),
+        latitude = LocationInput.formatForInput(location.latitudeDeg),
+        longitude = LocationInput.formatForInput(location.longitudeDeg),
+        altitude = LocationInput.formatForInput(location.altitudeMeters, maxDecimals = 0),
     )
 
     companion object {

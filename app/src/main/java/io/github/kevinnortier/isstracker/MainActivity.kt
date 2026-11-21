@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import io.github.kevinnortier.isstracker.ui.live.LiveRoute
+import io.github.kevinnortier.isstracker.ui.passes.PassesRoute
 import io.github.kevinnortier.isstracker.ui.settings.SettingsRoute
 import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
 
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private object Routes {
+    const val PASSES = "passes"
     const val LIVE = "live"
     const val SETTINGS = "settings"
 }
@@ -32,9 +34,16 @@ private object Routes {
 @Composable
 private fun AppNavigation() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Routes.LIVE) {
+    val openSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } }
+    NavHost(navController = navController, startDestination = Routes.PASSES) {
+        composable(Routes.PASSES) {
+            PassesRoute(
+                onOpenLive = { navController.navigate(Routes.LIVE) { launchSingleTop = true } },
+                onOpenSettings = openSettings,
+            )
+        }
         composable(Routes.LIVE) {
-            LiveRoute(onOpenSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } })
+            LiveRoute(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
         }
         composable(Routes.SETTINGS) {
             SettingsRoute(onBack = { navController.popBackStack() })

@@ -49,6 +49,32 @@ class FormatTest {
     }
 
     @Test
+    fun `day headings`() {
+        val today = java.time.LocalDate.of(2026, 11, 22)
+        assertEquals("Today", Format.day(today, today))
+        assertEquals("Tomorrow", Format.day(today.plusDays(1), today))
+        assertEquals("Tuesday 24 November", Format.day(today.plusDays(2), today))
+    }
+
+    @Test
+    fun countdowns() {
+        assertEquals("00:00", Format.countdown(Duration.ofSeconds(-5)))
+        assertEquals("04:07", Format.countdown(Duration.ofSeconds(247)))
+        assertEquals("59:59", Format.countdown(Duration.ofSeconds(3599)))
+        assertEquals("1 h 00 min", Format.countdown(Duration.ofSeconds(3600)))
+        assertEquals("26 h 05 min", Format.countdown(Duration.ofMinutes(26 * 60 + 5)))
+    }
+
+    @Test
+    fun `pass durations and times`() {
+        assertEquals("6 min 30 s", Format.passDuration(Duration.ofSeconds(390)))
+        assertEquals("45 s", Format.passDuration(Duration.ofSeconds(45)))
+        assertEquals("21:14", Format.time(Instant.parse("2026-11-22T21:14:59Z"), ZoneOffset.UTC))
+        assertEquals("21:14:59", Format.timeWithSeconds(Instant.parse("2026-11-22T21:14:59Z"), ZoneOffset.UTC))
+        assertEquals("45°", Format.degrees0(44.6))
+    }
+
+    @Test
     fun `24 hour date time`() {
         assertEquals(
             "2026-11-21 14:11",

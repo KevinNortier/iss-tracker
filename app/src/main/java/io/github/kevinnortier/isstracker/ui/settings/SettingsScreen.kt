@@ -19,6 +19,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +41,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kevinnortier.isstracker.data.settings.AppSettings
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
 
@@ -52,6 +55,7 @@ fun SettingsRoute(
         state = state,
         onBack = onBack,
         onLocationModeChange = viewModel::setLocationMode,
+        onMinElevationChange = viewModel::setMinElevation,
         onNameChange = { viewModel.updateForm(name = it) },
         onLatitudeChange = { viewModel.updateForm(latitude = it) },
         onLongitudeChange = { viewModel.updateForm(longitude = it) },
@@ -67,6 +71,7 @@ fun SettingsScreen(
     state: SettingsUiState,
     onBack: () -> Unit,
     onLocationModeChange: (LocationMode) -> Unit,
+    onMinElevationChange: (Double) -> Unit,
     onNameChange: (String) -> Unit,
     onLatitudeChange: (String) -> Unit,
     onLongitudeChange: (String) -> Unit,
@@ -126,6 +131,25 @@ fun SettingsScreen(
                     "It is never sent anywhere.",
                 style = MaterialTheme.typography.bodySmall,
             )
+
+            HorizontalDivider()
+
+            Text("Passes", style = MaterialTheme.typography.titleLarge)
+            Text("Minimum elevation", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "A pass only counts while the ISS is at least this high above the horizon. " +
+                    "0° shows every pass; higher values hide low passes behind trees and buildings.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppSettings.MIN_ELEVATION_CHOICES.forEach { degrees ->
+                    FilterChip(
+                        selected = state.settings.minElevationDeg == degrees,
+                        onClick = { onMinElevationChange(degrees) },
+                        label = { Text("${degrees.toInt()}°") },
+                    )
+                }
+            }
         }
     }
 }
@@ -224,6 +248,7 @@ private fun SettingsScreenPreview() {
             state = SettingsUiState(form = SavedLocationForm(name = "Greenwich", latitude = "51.4769", longitude = "-0.0005")),
             onBack = {},
             onLocationModeChange = {},
+            onMinElevationChange = {},
             onNameChange = {},
             onLatitudeChange = {},
             onLongitudeChange = {},
