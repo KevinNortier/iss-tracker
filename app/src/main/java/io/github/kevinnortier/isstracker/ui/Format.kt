@@ -31,6 +31,18 @@ object Format {
 
     fun kmPerSec(value: Double): String = String.format(Locale.ROOT, "%.2f km/s", value)
 
+    fun meters(value: Double): String = String.format(Locale.ROOT, "%.0f m", value)
+
+    fun accuracy(meters: Float): String = String.format(Locale.ROOT, "±%.0f m", meters)
+
+    /** Latitude/longitude with hemisphere letters, e.g. "51.4769° N, 0.0005° W". */
+    fun coordinates(latitudeDeg: Double, longitudeDeg: Double): String = String.format(
+        Locale.ROOT,
+        "%.4f° %s, %.4f° %s",
+        abs(latitudeDeg), if (latitudeDeg >= 0) "N" else "S",
+        abs(longitudeDeg), if (longitudeDeg >= 0) "E" else "W",
+    )
+
     fun dateTime(instant: Instant, zone: ZoneId = ZoneId.systemDefault()): String =
         DATE_TIME.format(instant.atZone(zone))
 

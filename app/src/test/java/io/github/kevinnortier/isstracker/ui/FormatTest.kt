@@ -37,6 +37,18 @@ class FormatTest {
     }
 
     @Test
+    fun `coordinates with hemispheres`() {
+        assertEquals("51.4769° N, 0.0005° W", Format.coordinates(51.4769, -0.0005))
+        assertEquals("33.8568° S, 151.2153° E", Format.coordinates(-33.8568, 151.2153))
+    }
+
+    @Test
+    fun `accuracy and metres`() {
+        assertEquals("±13 m", Format.accuracy(12.6f))
+        assertEquals("46 m", Format.meters(46.2))
+    }
+
+    @Test
     fun `24 hour date time`() {
         assertEquals(
             "2026-11-21 14:11",

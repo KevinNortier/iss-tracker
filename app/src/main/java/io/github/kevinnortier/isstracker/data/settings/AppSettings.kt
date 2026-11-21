@@ -1,0 +1,46 @@
+package io.github.kevinnortier.isstracker.data.settings
+
+import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import java.time.Instant
+
+/** Where the observer position comes from. */
+enum class LocationMode { CURRENT, SAVED }
+
+/** A location the user entered by hand. */
+data class SavedLocation(val name: String, val location: GeodeticLocation)
+
+/** A position reported by the phone's location services. */
+data class LocationFix(
+    val location: GeodeticLocation,
+    /** Horizontal accuracy (68 % confidence) in metres, if known. */
+    val accuracyMeters: Float?,
+    val time: Instant,
+    /** Location provider name, e.g. "gps", "network" or "fused". */
+    val provider: String,
+)
+
+data class AppSettings(
+    val locationMode: LocationMode = LocationMode.CURRENT,
+    val savedLocation: SavedLocation? = null,
+    /** The most recent fix from location services, kept so the app can start without waiting for GPS. */
+    val lastFix: LocationFix? = null,
+)
+
+/** The observer position the app should use right now, and where it came from. */
+sealed interface Observer {
+    val location: GeodeticLocation
+
+    data class Current(val fix: LocationFix) : Observer {
+        override val location get() = fix.location
+    }
+
+    data class Saved(val saved: SavedLocation) : Observer {
+        override val location get() = saved.location
+    }
+}
+
+/** Picks the observer from the settings, or null if the chosen source has no position yet. */
+fun AppSettings.resolveObserver(): Observer? = when (locationMode) {
+    LocationMode.CURRENT -> lastFix?.let { Observer.Current(it) }
+    LocationMode.SAVED -> savedLocation?.let { Observer.Saved(it) }
+}
