@@ -173,7 +173,7 @@ fun SettingsScreen(
             }
 
             Text(
-                "Your location is only used on this phone to calculate where the ISS is. " +
+                "Your location is only used on this phone to calculate where the satellites are. " +
                     "It is never sent anywhere.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -183,7 +183,7 @@ fun SettingsScreen(
             Text("Passes", style = MaterialTheme.typography.titleLarge)
             Text("Minimum elevation", style = MaterialTheme.typography.bodyLarge)
             Text(
-                "A pass only counts while the ISS is at least this high above the horizon. " +
+                "A pass only counts while the satellite is at least this high above the horizon. " +
                     "0° shows every pass; higher values hide low passes behind trees and buildings.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -209,7 +209,7 @@ fun SettingsScreen(
             HorizontalDivider()
 
             Text("Find in sky", style = MaterialTheme.typography.titleLarge)
-            Text("Point at the ISS with", style = MaterialTheme.typography.bodyLarge)
+            Text("Point with", style = MaterialTheme.typography.bodyLarge)
             Text(
                 "Back: hold the phone like a camera. Top: e.g. with the phone strapped along an antenna, " +
                     "binoculars or a camera.",
@@ -231,7 +231,7 @@ fun SettingsScreen(
             Text(
                 "Compass: always knows north, but magnets (e.g. MagSafe) and metal disturb it. " +
                     "Gyro: unaffected by magnets; north is set when Find in sky opens and can be re-aligned " +
-                    "by pointing at the sun or the ISS.",
+                    "by pointing at the sun or a bright satellite.",
                 style = MaterialTheme.typography.bodySmall,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

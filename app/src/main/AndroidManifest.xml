@@ -5,7 +5,7 @@
     <!-- Only used to download orbit data (TLE) from CelesTrak. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- The observer position, used only on the device to calculate where the ISS is. -->
+    <!-- The observer position, used only on the device to calculate the passes. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 

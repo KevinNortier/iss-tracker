@@ -1,22 +1,33 @@
 # ISS Tracker
 
-An Android app that tells you when the International Space Station passes over you, where to look,
-and when you can see it with your own eyes. It works offline, doesn't need Google Play Services,
-and keeps your location on your phone.
+An Android app that tells you when the International Space Station, and any other satellite you
+choose, passes over you, where to look, and when you can see it with your own eyes. It works offline,
+doesn't need Google Play Services, and keeps your location on your phone.
 
 ## Features
 
-- **Pass list** — every pass for the next 10 days, grouped by day: rise → highest point → set, with
-  compass directions, maximum elevation and duration. Passes you can see with the naked eye
-  (the ISS is sunlit while your sky is dark) are marked with a ★.
+- **Satellites** — tracks the ISS by default. Add up to 20 satellites by browsing CelesTrak's lists
+  (space stations, amateur radio, weather, brightest), searching by name, or entering a NORAD ID;
+  remove and reorder them in Settings → Satellites. Each satellite has its own colour. Only
+  low-Earth orbits are supported for now (high orbits are shown greyed out).
+- **Pass list** — every pass of every tracked satellite for the next 10 days in one list, grouped by
+  day: rise → highest point → set, with compass directions, maximum elevation and duration. Filter
+  chips show all satellites or just the ones you pick. Passes you can see with the naked eye
+  (sunlit while your sky is dark) are marked with a ★. That's only for bright satellites: space
+  stations and CelesTrak's "brightest" list. Other satellites get a "sunlit" note instead, since most
+  are too faint to see.
 - **Next / current pass** — a countdown to the next pass, or live azimuth and elevation during one.
 - **Pass details** — a sky plot of the path (centre = straight up, edge = horizon, north up) with the
-  part that is visible to the naked eye highlighted.
-- **Find in sky** — point the phone at the ISS: a ring shows where to move the phone, with
-  "turn right / tilt up" guidance and a vibration when you're on target. Use the back of the phone
-  (held like a camera) or its top edge (e.g. strapped along an antenna, binoculars or a camera).
-  The compass is corrected to true north. While the ISS is below the horizon it points at where
-  the next pass will rise.
+  sunlit part highlighted.
+- **Find in sky** — point the phone at a satellite: a ring shows where to move the phone, with
+  "turn right / tilt up" guidance and a vibration when you're on target. Pick the satellite at the
+  top of the screen. Use the back of the phone (held like a camera) or its top edge (e.g. strapped
+  along an antenna, binoculars or a camera). While the satellite is below the horizon it points at
+  where the next pass will rise.
+- **Compass or gyro heading** — the compass is corrected to true north and warns about magnetic
+  interference (it shows the field strength; magnets like MagSafe make it unreliable). Gyro mode
+  ignores magnets: north is taken from the compass once when the screen opens, and can be re-aligned
+  by pointing at the sun or a bright satellite.
 - **Reminders** — tap the bell on a pass to get a notification before it rises or reaches its
   highest point (5–60 minutes before, default 15). Uses exact alarms, survives reboots, and follows
   updated orbit data.
@@ -64,8 +75,9 @@ package name and fingerprint. If they don't match, don't install it.
 ## Privacy
 
 - Your location is only used on the phone to calculate the passes. It is never sent anywhere.
-- The only network request is downloading the ISS orbit data (TLE) from
-  [CelesTrak](https://celestrak.org/), about once a day. It contains no personal data.
+- The only network requests go to [CelesTrak](https://celestrak.org/): downloading the orbit data
+  (TLE) of your satellites about once a day, and, while you add satellites, its lists and your search
+  text. They contain no personal data.
 - No ads, no analytics, no Google Play Services.
 
 ## Requirements
@@ -86,21 +98,23 @@ package name and fingerprint. If they don't match, don't install it.
 
 ## How it works
 
-- **Orbit data:** the current two-line element set (TLE) for the ISS (NORAD 25544) from CelesTrak's GP
-  API, cached on the phone and refreshed daily in the background (WorkManager). The app warns when
-  the data is more than 3 days old.
+- **Orbit data:** the current two-line element set (TLE) of each tracked satellite (the ISS is NORAD
+  25544) from CelesTrak's GP API, cached on the phone and refreshed daily in the background
+  (WorkManager). The app warns when the data is more than 3 days old. Satellite lists come from the
+  same API (groups `stations`, `amateur`, `weather`, `visual`, plus name search), cached for a day.
 - **Orbit model:** a Kotlin port of the SGP4 propagator from David Vallado's reference implementation
   (*Revisiting Spacetrack Report #3*, AIAA 2006-6753). Only near-earth orbits (period under 225 minutes,
   like the ISS) are supported.
 - **Look angles:** TEME → Earth-fixed via GMST, observer on the WGS-84 ellipsoid, giving azimuth,
   elevation, range and range rate.
 - **Visibility:** a low-precision solar ephemeris and a cylindrical Earth shadow; a pass is visible
-  when the ISS is sunlit, above the horizon, and the sun is more than 6° below your horizon.
+  when the satellite is sunlit, above the horizon, and the sun is more than 6° below your horizon.
 - **Pass prediction:** 30-second search steps, bisection for rise/set and golden-section search for
   the highest point (about 0.1 s precision).
 - **Find in sky:** the rotation-vector sensor gives the phone's orientation; the target direction is
   rotated into the phone's frame, and the compass is corrected with the magnetic declination
-  (`GeomagneticField`).
+  (`GeomagneticField`). Gyro mode uses the game rotation vector (gyro + accelerometer, no
+  magnetometer) and a heading offset set from the compass, the sun or the satellite.
 
 ### Accuracy
 
@@ -130,7 +144,7 @@ Open the project in Android Studio, or from the command line (JDK 17+):
 
 The debug APK ends up in `app/build/outputs/apk/debug/` (`iss-tracker-<version>-debug.apk`). Debug builds
 use the package name `io.github.kevinnortier.isstracker.debug` and the name "ISS Tracker (debug)", so they
-install next to the release app.
+install next to the release app. They have a red bug badge on the launcher icon and next to the title.
 
 ### Versions
 
@@ -161,11 +175,11 @@ venv/bin/python <project>/tools/generate_orbit_reference.py
 ```
 app/src/main/java/io/github/kevinnortier/isstracker/
 ├── orbit/       TLE parser, SGP4, frames, look angles, sun, pass prediction (pure Kotlin)
-├── data/        TLE download + cache + daily refresh, settings (DataStore)
+├── data/        TLE download + cache + daily refresh, CelesTrak catalog, settings (DataStore)
 ├── location/    device location (LocationManager)
 ├── notify/      pass reminders: planning, exact alarms, notifications, boot receiver
 ├── sensors/     orientation sensor and pointing math
-└── ui/          Compose screens: passes, pass details, find in sky, details, settings
+└── ui/          Compose screens: passes, pass details, find in sky, details, satellites, settings
 ```
 
 ## Credits
