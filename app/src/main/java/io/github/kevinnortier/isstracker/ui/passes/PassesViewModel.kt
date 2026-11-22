@@ -108,8 +108,6 @@ data class PassesUiState(
     val withoutData: List<Satellite> = emptyList(),
     /** Passes (from [passes]) that have a reminder turned on. */
     val reminders: Set<SatPass> = emptySet(),
-    /** The satellite the Find in sky / Details screens show (until they become per-satellite). */
-    val screensNoradId: Int = Satellite.ISS.noradId,
     val now: Instant = Instant.EPOCH,
 ) {
     val noSatellites: Boolean get() = !loading && tracked.isEmpty()
@@ -220,7 +218,6 @@ class PassesViewModel(
             tracked = tracked,
             shown = shown,
             oldestTleEpoch = tles.filter { it.first.noradId in shown }.mapNotNull { it.second?.epoch }.minOrNull(),
-            screensNoradId = container.satellite.noradId,
             now = now,
         )
         when (prediction) {

@@ -112,7 +112,7 @@ fun PassDetailsRoute(
                     Facts(state, pass)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Find in sky aims at the current or next pass, so only offer it for that one.
-                        if (state.findInSkyTracksThis && state.findInSkyShowsSatellite) {
+                        if (state.findInSkyTracksThis) {
                             Button(onClick = onOpenAim) { Text("Find in sky") }
                         }
                         FilledTonalButton(

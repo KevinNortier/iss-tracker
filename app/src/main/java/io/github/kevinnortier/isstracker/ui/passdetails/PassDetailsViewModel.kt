@@ -51,8 +51,6 @@ data class PassDetailsUiState(
      * (every earlier pass has ended).
      */
     val findInSkyTracksThis: Boolean = false,
-    /** Find in sky can show this satellite (for now it only shows one). */
-    val findInSkyShowsSatellite: Boolean = false,
     val now: Instant = Instant.EPOCH,
 )
 
@@ -117,7 +115,6 @@ class PassDetailsViewModel(
             noradId = noradId,
             satelliteName = satellite?.displayName ?: "#$noradId",
             bright = satellite?.bright ?: false,
-            findInSkyShowsSatellite = noradId == container.satellite.noradId,
             now = now,
         )
         when {

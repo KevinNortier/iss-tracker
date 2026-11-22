@@ -53,26 +53,30 @@ class MainActivity : ComponentActivity() {
 
 private object Routes {
     const val PASSES = "passes"
-    const val LIVE = "live"
+    const val LIVE = "live/{norad}"
     const val SETTINGS = "settings"
-    const val AIM = "aim"
+    const val AIM = "aim/{norad}"
     const val SATELLITES = "satellites"
     const val ADD_SATELLITE = "satellites/add"
     const val PASS_DETAILS = "pass/{norad}/{rise}"
 
     fun passDetails(noradId: Int, riseMillis: Long) = "pass/$noradId/$riseMillis"
+    fun live(noradId: Int) = "live/$noradId"
+    fun aim(noradId: Int) = "aim/$noradId"
 }
 
 @Composable
 private fun AppNavigation() {
     val navController = rememberNavController()
     val openSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } }
-    val openAim = { navController.navigate(Routes.AIM) { launchSingleTop = true } }
+    val openAim: (Int) -> Unit = { noradId -> navController.navigate(Routes.aim(noradId)) { launchSingleTop = true } }
+    val openLive: (Int) -> Unit = { noradId -> navController.navigate(Routes.live(noradId)) { launchSingleTop = true } }
+    val noradArg = listOf(navArgument("norad") { type = NavType.IntType })
     val back: () -> Unit = { navController.popBackStack() }
     NavHost(navController = navController, startDestination = Routes.PASSES) {
         composable(Routes.PASSES) {
             PassesRoute(
-                onOpenLive = { navController.navigate(Routes.LIVE) { launchSingleTop = true } },
+                onOpenLive = openLive,
                 onOpenAim = openAim,
                 onOpenSettings = openSettings,
                 onOpenSatellites = { navController.navigate(Routes.SATELLITES) { launchSingleTop = true } },
@@ -90,14 +94,15 @@ private fun AppNavigation() {
                 noradId = entry.arguments?.getInt("norad") ?: 0,
                 riseMillis = entry.arguments?.getLong("rise") ?: 0L,
                 onBack = back,
-                onOpenAim = openAim,
+                onOpenAim = { openAim(entry.arguments?.getInt("norad") ?: 0) },
             )
         }
-        composable(Routes.LIVE) {
-            LiveRoute(onBack = back, onOpenAim = openAim, onOpenSettings = openSettings)
+        composable(Routes.LIVE, arguments = noradArg) { entry ->
+            val noradId = entry.arguments?.getInt("norad") ?: 0
+            LiveRoute(noradId = noradId, onBack = back, onOpenAim = { openAim(noradId) }, onOpenSettings = openSettings)
         }
-        composable(Routes.AIM) {
-            AimRoute(onBack = back)
+        composable(Routes.AIM, arguments = noradArg) { entry ->
+            AimRoute(noradId = entry.arguments?.getInt("norad") ?: 0, onBack = back)
         }
         composable(Routes.SETTINGS) {
             SettingsRoute(

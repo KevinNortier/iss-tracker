@@ -34,12 +34,6 @@ private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 /** Simple manual dependency container, created once per process. */
 class AppContainer(app: Application) {
 
-    /**
-     * The satellite the screens show. Still the ISS: the screens become per-satellite in later steps
-     * (S3/S4). Background work (orbit data refresh, reminders) already covers all tracked satellites.
-     */
-    val satellite: Satellite = Satellite.ISS
-
     private val celesTrak = CelesTrakDownloader(userAgent = "ISS-Tracker-Android/${BuildConfig.VERSION_NAME}")
 
     val tleRepository = TleRepository(cacheDir = File(app.filesDir, "tle"), downloader = celesTrak)

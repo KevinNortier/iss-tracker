@@ -81,8 +81,8 @@ import java.time.ZoneId
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PassesRoute(
-    onOpenLive: () -> Unit,
-    onOpenAim: () -> Unit,
+    onOpenLive: (noradId: Int) -> Unit,
+    onOpenAim: (noradId: Int) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSatellites: () -> Unit,
     onOpenPass: (noradId: Int, riseMillis: Long) -> Unit,
@@ -266,8 +266,8 @@ private fun NotificationsBlockedCard(onOpenSettings: () -> Unit) {
 @Composable
 private fun HeadlineCard(
     state: PassesUiState,
-    onOpenLive: () -> Unit,
-    onOpenAim: () -> Unit,
+    onOpenLive: (noradId: Int) -> Unit,
+    onOpenAim: (noradId: Int) -> Unit,
     onToggleReminder: (SatPass) -> Unit,
 ) {
     val current = state.current.firstOrNull()
@@ -291,10 +291,9 @@ private fun HeadlineCard(
             }
             Spacer(Modifier.height(12.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Find in sky and Details show one satellite (for now the ISS); only offer them for that one.
-                if (shownPass != null && shownPass.noradId == state.screensNoradId) {
-                    Button(onClick = onOpenAim) { Text("Find in sky") }
-                    FilledTonalButton(onClick = onOpenLive) { Text("Details") }
+                if (shownPass != null) {
+                    Button(onClick = { onOpenAim(shownPass.noradId) }) { Text("Find in sky") }
+                    FilledTonalButton(onClick = { onOpenLive(shownPass.noradId) }) { Text("Details") }
                 }
                 if (current == null && next != null) {
                     val on = state.hasReminder(next)
