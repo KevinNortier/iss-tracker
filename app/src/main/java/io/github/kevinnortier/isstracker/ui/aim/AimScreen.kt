@@ -8,6 +8,7 @@ import android.content.pm.ActivityInfo
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -52,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kevinnortier.isstracker.sensors.AimSolution
 import io.github.kevinnortier.isstracker.sensors.CompassAccuracy
+import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import io.github.kevinnortier.isstracker.ui.DetailRow
 import io.github.kevinnortier.isstracker.ui.Format
@@ -59,6 +62,7 @@ import java.time.Duration
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Degrees from the centre to the outer ring. Targets further away are pinned to the edge. */
 private const val RING_RANGE_DEG = 45.0
@@ -92,6 +96,7 @@ fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = A
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             AxisSelector(state.axis, viewModel::setAxis)
+            HeadingSelector(state.headingSource, viewModel::setHeadingSource)
             when {
                 !state.sensorAvailable -> Text(
                     "This phone has no orientation sensor, so aiming isn't possible.",
@@ -102,7 +107,23 @@ fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = A
                     TargetBanner(state)
                     AimRing(state)
                     Guidance(state)
-                    if (state.needsCalibration) CalibrationHint()
+                    if (state.headingSource == HeadingSource.GYRO && !state.gyroUnavailable) {
+                        GyroAlignmentCard(
+                            state = state,
+                            onAlignToSun = viewModel::alignToSun,
+                            onAlignToIss = viewModel::alignToIss,
+                            onAlignFromCompass = viewModel::alignFromCompass,
+                        )
+                    } else {
+                        if (state.gyroUnavailable) {
+                            Text(
+                                "This phone has no gyro-only rotation sensor, so the compass is used.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (state.magneticInterference) InterferenceWarning(state.magneticFieldMicroTesla)
+                        if (state.needsCalibration) CalibrationHint()
+                    }
                     Numbers(state)
                 }
             }
@@ -126,6 +147,88 @@ private fun AxisSelector(axis: PointingAxis, onChange: (PointingAxis) -> Unit) {
                 label = { Text("Top of phone") },
             )
         }
+    }
+}
+
+@Composable
+private fun HeadingSelector(source: HeadingSource, onChange: (HeadingSource) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Heading from", style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = source == HeadingSource.COMPASS,
+                onClick = { onChange(HeadingSource.COMPASS) },
+                label = { Text("Compass") },
+            )
+            FilterChip(
+                selected = source == HeadingSource.GYRO,
+                onClick = { onChange(HeadingSource.GYRO) },
+                label = { Text("Gyro") },
+            )
+        }
+    }
+}
+
+/** Gyro mode: how north was set, and buttons to set it again. */
+@Composable
+private fun GyroAlignmentCard(
+    state: AimUiState,
+    onAlignToSun: () -> Unit,
+    onAlignToIss: () -> Unit,
+    onAlignFromCompass: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Gyro heading", style = MaterialTheme.typography.titleMedium)
+            val alignment = state.alignment
+            Text(
+                if (alignment == null) {
+                    "Aligning north from the compass…"
+                } else {
+                    val age = Format.duration(Duration.between(alignment.time, state.now))
+                    val how = when (alignment.method) {
+                        AlignMethod.COMPASS_AUTO -> "from the compass when this screen opened"
+                        AlignMethod.COMPASS -> "from the compass"
+                        AlignMethod.SUN -> "by pointing at the sun"
+                        AlignMethod.ISS -> "by pointing at the ISS"
+                    }
+                    "North was set $how ($age ago). Magnets don't affect it; it may drift slowly, so re-align " +
+                        "now and then."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "To align: point the ${if (state.axis == PointingAxis.BACK) "back" else "top"} of the phone " +
+                    "at the sun or the ISS and tap the button.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            state.alignMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onAlignToSun, enabled = state.canAlignToSun) { Text("Align to sun") }
+                FilledTonalButton(onClick = onAlignToIss, enabled = state.canAlignToIss) { Text("Align to ISS") }
+                FilledTonalButton(onClick = onAlignFromCompass) { Text("Align from compass") }
+            }
+            if (!state.canAlignToSun) {
+                Text(
+                    "The sun is ${if ((state.sun?.elevationDeg ?: -1.0) <= 0) "below the horizon" else "too high"} " +
+                        "to align to right now.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InterferenceWarning(fieldMicroTesla: Double?) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+        Text(
+            "Strong magnetic interference" + (fieldMicroTesla?.let { " (${it.roundToInt()} µT, normal is about 25–65)" } ?: "") +
+                ". A magnet (e.g. MagSafe) or metal near the phone makes the compass unreliable. " +
+                "Switch \"Heading from\" to Gyro.",
+            color = MaterialTheme.colorScheme.onErrorContainer,
+            modifier = Modifier.padding(12.dp),
+        )
     }
 }
 
@@ -272,7 +375,11 @@ private fun Numbers(state: AimUiState) {
                 DetailRow("Distance", Format.km(target.look.rangeKm))
             }
             DetailRow("Magnetic declination", Format.degrees1(state.declinationDeg))
+            DetailRow("Heading from", if (state.headingSource == HeadingSource.GYRO && !state.gyroUnavailable) "Gyro" else "Compass")
             DetailRow("Compass calibration", state.compassAccuracy.label())
+            state.magneticFieldMicroTesla?.let {
+                DetailRow("Magnetic field", "${it.roundToInt()} µT" + if (state.magneticInterference) " (disturbed)" else "")
+            }
             Spacer(Modifier.height(4.dp))
             Text(
                 "Azimuths are relative to true north (the compass is corrected for magnetic declination).",

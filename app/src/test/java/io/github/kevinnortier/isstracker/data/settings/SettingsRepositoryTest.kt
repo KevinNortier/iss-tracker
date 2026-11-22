@@ -3,6 +3,7 @@ package io.github.kevinnortier.isstracker.data.settings
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -121,6 +122,14 @@ class SettingsRepositoryTest {
         assertEquals(PointingAxis.BACK, repo.settings.first().pointingAxis)
         repo.setPointingAxis(PointingAxis.TOP)
         assertEquals(PointingAxis.TOP, repo.settings.first().pointingAxis)
+    }
+
+    @Test
+    fun `heading source defaults to compass and can be changed`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(HeadingSource.COMPASS, repo.settings.first().headingSource)
+        repo.setHeadingSource(HeadingSource.GYRO)
+        assertEquals(HeadingSource.GYRO, repo.settings.first().headingSource)
     }
 
     @Test

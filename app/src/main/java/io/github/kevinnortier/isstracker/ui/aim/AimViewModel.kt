@@ -13,10 +13,12 @@ import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import io.github.kevinnortier.isstracker.orbit.LookAngles
 import io.github.kevinnortier.isstracker.orbit.Pass
 import io.github.kevinnortier.isstracker.orbit.PassPredictor
+import io.github.kevinnortier.isstracker.orbit.Sun
 import io.github.kevinnortier.isstracker.orbit.Tle
 import io.github.kevinnortier.isstracker.sensors.AimSolution
 import io.github.kevinnortier.isstracker.sensors.AzEl
 import io.github.kevinnortier.isstracker.sensors.CompassAccuracy
+import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.OrientationReading
 import io.github.kevinnortier.isstracker.sensors.Pointing
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
@@ -24,10 +26,12 @@ import io.github.kevinnortier.isstracker.ui.secondTicker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -62,17 +66,36 @@ fun chooseTarget(look: LookAngles, passes: List<Pass>, now: Instant): AimTarget?
     return AimTarget.NextRise(AzEl(next.rise.azimuthDeg, next.rise.elevationDeg), next)
 }
 
+/** How the gyro heading was aligned to north. */
+enum class AlignMethod { COMPASS_AUTO, COMPASS, SUN, ISS }
+
+/** Gyro-mode heading alignment: true azimuth = gyro azimuth + [offsetDeg]. */
+data class HeadingAlignment(val offsetDeg: Double, val method: AlignMethod, val time: Instant)
+
 data class AimUiState(
     val satelliteName: String,
     val sensorAvailable: Boolean = true,
     val axis: PointingAxis = PointingAxis.BACK,
+    val headingSource: HeadingSource = HeadingSource.COMPASS,
+    /** True when gyro mode was chosen but this phone has no gyro-only rotation sensor. */
+    val gyroUnavailable: Boolean = false,
+    /** Gyro mode only: how and when the heading was aligned (null while waiting for the first alignment). */
+    val alignment: HeadingAlignment? = null,
+    /** Result of the last "align" tap that couldn't be done, e.g. pointing straight up. */
+    val alignMessage: String? = null,
+    /** Where the sun is, and whether it's a good alignment target right now. */
+    val sun: AzEl? = null,
+    val canAlignToSun: Boolean = false,
+    val canAlignToIss: Boolean = false,
     /** Why aiming isn't possible (no location / orbit data), if so. */
     val problem: String? = null,
     val target: AimTarget? = null,
-    /** Null until the first sensor reading arrives. */
+    /** Null until the first sensor reading arrives (and, in gyro mode, the heading is aligned). */
     val aim: AimSolution? = null,
     val needsCalibration: Boolean = false,
     val compassAccuracy: CompassAccuracy = CompassAccuracy.UNKNOWN,
+    val magneticFieldMicroTesla: Double? = null,
+    val magneticInterference: Boolean = false,
     val declinationDeg: Double = 0.0,
     val now: Instant = Instant.EPOCH,
 ) {
@@ -81,6 +104,9 @@ data class AimUiState(
     companion object {
         /** Within this many degrees counts as "on target". */
         const val ON_TARGET_DEG = 5.0
+
+        /** Aligning to the sun or the ISS needs it clearly above the horizon but not overhead. */
+        val ALIGN_ELEVATION_RANGE = 2.0..75.0
     }
 }
 
@@ -93,72 +119,166 @@ class AimViewModel(
     private data class Geometry(
         val predictor: PassPredictor?,
         val passes: List<Pass>,
+        val location: GeodeticLocation?,
         val declinationDeg: Double,
         val problem: String?,
     )
 
     private val settings = container.settingsRepository.settings
+    private val sensor = container.orientationSensor
 
     private val inputs: Flow<Pair<Tle?, Pair<GeodeticLocation?, Double>>> = combine(
         container.tleRepository.latest(container.satellite.noradId).map { it?.tle }.distinctUntilChanged(),
         settings.map { it.resolveObserver()?.location to it.minElevationDeg }.distinctUntilChanged(),
     ) { tle, observer -> tle to observer }
 
-    /** Predictor, the next day of passes and the magnetic declination; recalculated when inputs change. */
+    /** Predictor, the next days of passes and the magnetic declination; recalculated when inputs change. */
     private val geometry: Flow<Geometry> = inputs.mapLatest { (tle, observer) ->
         val (location, minElevation) = observer
         when {
-            location == null -> Geometry(null, emptyList(), 0.0, "Choose a location first (Settings).")
-            tle == null -> Geometry(null, emptyList(), 0.0, "Waiting for orbit data…")
+            location == null -> Geometry(null, emptyList(), null, 0.0, "Choose a location first (Settings).")
+            tle == null -> Geometry(null, emptyList(), location, 0.0, "Waiting for orbit data…")
             else -> try {
                 val predictor = PassPredictor(tle, location, minElevation)
                 val now = clock.instant()
                 val passes = predictor.passes(now, now.plus(Duration.ofDays(2)))
-                Geometry(predictor, passes, declination(location, now), null)
+                Geometry(predictor, passes, location, declination(location, now), null)
             } catch (e: RuntimeException) {
-                Geometry(null, emptyList(), 0.0, "Could not calculate the position: ${e.message}")
+                Geometry(null, emptyList(), location, 0.0, "Could not calculate the position: ${e.message}")
             }
         }
     }.flowOn(Dispatchers.Default)
 
-    private val readings: Flow<OrientationReading?> = container.orientationSensor.readings()
-        .map<OrientationReading, OrientationReading?> { it }
-        .onStart { emit(null) }
+    /** Gyro alignment for the current sensor session. The gyro's "north" resets whenever the sensor restarts. */
+    private val alignment = MutableStateFlow<HeadingAlignment?>(null)
+    private val alignMessage = MutableStateFlow<String?>(null)
+
+    private val headingSource = settings.map { it.headingSource }.distinctUntilChanged()
+
+    private val readings: Flow<OrientationReading?> = headingSource.flatMapLatest { source ->
+        sensor.readings(source)
+            .map<OrientationReading, OrientationReading?> { it }
+            .onStart {
+                alignment.value = null // a new sensor session: the old alignment no longer applies
+                alignMessage.value = null
+                emit(null)
+            }
+    }
+
+    // The latest values, for the align actions.
+    private var lastReading: OrientationReading? = null
+    private var lastState: AimUiState? = null
 
     val uiState: StateFlow<AimUiState> = combine(
-        settings.map { it.pointingAxis }.distinctUntilChanged(),
+        combine(settings.map { it.pointingAxis }.distinctUntilChanged(), headingSource, ::Pair),
         geometry,
         readings,
+        combine(alignment, alignMessage, ::Pair),
         secondTicker(clock), // keeps the target moving even without sensor readings
-    ) { axis, geo, reading, _ ->
+    ) { (axis, source), geo, reading, (align, message), _ ->
         val now = clock.instant()
+        lastReading = reading
         val target = geo.predictor?.let { p ->
             runCatching { chooseTarget(p.lookAngles(now), geo.passes, now) }.getOrNull()
         }
+
+        // Gyro mode starts aligned from the compass as soon as both readings are there.
+        var currentAlignment = align
+        if (reading?.source == HeadingSource.GYRO && currentAlignment == null && reading.compassMatrix != null) {
+            currentAlignment = HeadingAlignment(
+                Pointing.gyroOffsetFromCompass(reading.compassMatrix, reading.rotationMatrix, geo.declinationDeg),
+                AlignMethod.COMPASS_AUTO,
+                now,
+            )
+            alignment.value = currentAlignment
+        }
+
+        val aim = when {
+            reading == null || target == null -> null
+            reading.source == HeadingSource.COMPASS ->
+                Pointing.solve(reading.rotationMatrix, axis, target.direction, geo.declinationDeg)
+            currentAlignment != null -> Pointing.solve(
+                Pointing.rotateAboutVertical(reading.rotationMatrix, currentAlignment.offsetDeg),
+                axis,
+                target.direction,
+                declinationDeg = 0.0, // the aligned gyro frame already uses true north
+            )
+            else -> null
+        }
+
+        val sun = geo.location?.let { location ->
+            val (az, el) = Sun.lookAngles(location, now)
+            AzEl(az, el)
+        }
         AimUiState(
             satelliteName = container.satellite.displayName,
-            sensorAvailable = container.orientationSensor.isAvailable,
+            sensorAvailable = sensor.isAvailable,
             axis = axis,
+            headingSource = source,
+            gyroUnavailable = source == HeadingSource.GYRO && !sensor.isGyroAvailable,
+            alignment = if (reading?.source == HeadingSource.GYRO) currentAlignment else null,
+            alignMessage = message,
+            sun = sun,
+            canAlignToSun = sun != null && sun.elevationDeg in AimUiState.ALIGN_ELEVATION_RANGE,
+            canAlignToIss = target is AimTarget.Live && target.direction.elevationDeg in AimUiState.ALIGN_ELEVATION_RANGE,
             problem = geo.problem,
             target = target,
-            aim = if (reading != null && target != null) {
-                Pointing.solve(reading.rotationMatrix, axis, target.direction, geo.declinationDeg)
-            } else {
-                null
-            },
+            aim = aim,
             needsCalibration = reading?.needsCalibration ?: false,
             compassAccuracy = reading?.compassAccuracy ?: CompassAccuracy.UNKNOWN,
+            magneticFieldMicroTesla = reading?.magneticFieldMicroTesla,
+            magneticInterference = reading?.magneticInterference ?: false,
             declinationDeg = geo.declinationDeg,
             now = now,
-        )
+        ).also { lastState = it }
     }.stateIn(
         viewModelScope,
-        SharingStarted.WhileSubscribed(2_000), // stops the sensor shortly after leaving the screen
+        SharingStarted.WhileSubscribed(2_000), // stops the sensors shortly after leaving the screen
         AimUiState(satelliteName = container.satellite.displayName),
     )
 
     fun setAxis(axis: PointingAxis) {
         viewModelScope.launch { container.settingsRepository.setPointingAxis(axis) }
+    }
+
+    fun setHeadingSource(source: HeadingSource) {
+        viewModelScope.launch { container.settingsRepository.setHeadingSource(source) }
+    }
+
+    /** Gyro mode: take north from the compass again (e.g. away from magnets). */
+    fun alignFromCompass() {
+        val reading = lastReading ?: return
+        val compass = reading.compassMatrix ?: return
+        val declination = lastState?.declinationDeg ?: 0.0
+        setAlignment(Pointing.gyroOffsetFromCompass(compass, reading.rotationMatrix, declination), AlignMethod.COMPASS)
+    }
+
+    /** Gyro mode: the user points the phone at the sun; its known azimuth sets north. */
+    fun alignToSun() {
+        val sun = lastState?.sun ?: return
+        alignToDirection(sun, AlignMethod.SUN)
+    }
+
+    /** Gyro mode: the user points the phone at the ISS (visible pass); its known azimuth sets north. */
+    fun alignToIss() {
+        val target = lastState?.target as? AimTarget.Live ?: return
+        alignToDirection(target.direction, AlignMethod.ISS)
+    }
+
+    private fun alignToDirection(direction: AzEl, method: AlignMethod) {
+        val reading = lastReading ?: return
+        val axis = lastState?.axis ?: PointingAxis.BACK
+        val offset = Pointing.gyroOffsetFromTarget(reading.rotationMatrix, axis, direction.azimuthDeg)
+        if (offset == null) {
+            alignMessage.value = "Can't align while pointing almost straight up or down."
+        } else {
+            setAlignment(offset, method)
+        }
+    }
+
+    private fun setAlignment(offset: Double, method: AlignMethod) {
+        alignment.value = HeadingAlignment(offset, method, clock.instant())
+        alignMessage.value = null
     }
 
     private fun declination(location: GeodeticLocation, now: Instant): Double = GeomagneticField(

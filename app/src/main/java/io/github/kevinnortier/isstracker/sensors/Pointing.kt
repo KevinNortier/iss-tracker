@@ -19,6 +19,15 @@ enum class PointingAxis {
     TOP,
 }
 
+/** Where the phone's heading (which way is north) comes from. */
+enum class HeadingSource {
+    /** Rotation vector sensor: gyro + accelerometer + magnetometer. Absolute, but disturbed by magnets and metal. */
+    COMPASS,
+
+    /** Game rotation vector: gyro + accelerometer only. Immune to magnets; the heading must be aligned once. */
+    GYRO,
+}
+
 /** A direction as azimuth (degrees from north, clockwise) and elevation (degrees above the horizon). */
 data class AzEl(val azimuthDeg: Double, val elevationDeg: Double)
 
@@ -160,6 +169,65 @@ object Pointing {
             c0.y.toFloat(), c1.y.toFloat(), c2.y.toFloat(),
             c0.z.toFloat(), c1.z.toFloat(), c2.z.toFloat(),
         )
+    }
+
+    // ---- Gyro heading alignment -------------------------------------------------------------
+    //
+    // The game rotation vector has a correct "up" (from gravity) but an arbitrary "north". It differs
+    // from the real world frame only by a rotation about the vertical axis, so one angle (the
+    // heading offset) is enough to align it: true azimuth = gyro azimuth + offset.
+
+    /**
+     * Rotates the world frame of [r] clockwise (seen from above) about the vertical by [degrees], so
+     * every azimuth computed from the result is [degrees] larger. Returns a new matrix.
+     */
+    fun rotateAboutVertical(r: FloatArray, degrees: Double): FloatArray {
+        val a = degrees * DEG2RAD
+        val c = cos(a).toFloat()
+        val s = sin(a).toFloat()
+        // world' = Rcw · world, with Rcw = [[c, s, 0], [-s, c, 0], [0, 0, 1]]
+        return floatArrayOf(
+            c * r[0] + s * r[3], c * r[1] + s * r[4], c * r[2] + s * r[5],
+            -s * r[0] + c * r[3], -s * r[1] + c * r[4], -s * r[2] + c * r[5],
+            r[6], r[7], r[8],
+        )
+    }
+
+    /**
+     * Azimuth of a device axis projected onto the horizontal plane, measured from the frame's own
+     * north, or null when the axis is within about 10° of vertical (its azimuth is then meaningless).
+     */
+    fun horizontalAzimuth(r: FloatArray, deviceAxis: Vector3): Double? {
+        val w = toWorld(r, deviceAxis)
+        if (hypot(w.x, w.y) < 0.17) return null
+        return normalizeAzimuth(atan2(w.x, w.y) * RAD2DEG)
+    }
+
+    /** The device axis (X, Y or Z) that is closest to horizontal, i.e. best for comparing headings. */
+    fun mostHorizontalAxis(r: FloatArray): Vector3 = listOf(
+        Vector3(1.0, 0.0, 0.0),
+        Vector3(0.0, 1.0, 0.0),
+        Vector3(0.0, 0.0, 1.0),
+    ).maxBy { val w = toWorld(r, it); hypot(w.x, w.y) }
+
+    /**
+     * Heading offset for gyro mode from a compass (rotation vector) and a gyro (game rotation
+     * vector) matrix taken at the same moment. Works in any phone orientation.
+     */
+    fun gyroOffsetFromCompass(compass: FloatArray, gyro: FloatArray, declinationDeg: Double): Double {
+        val axis = mostHorizontalAxis(gyro)
+        val compassAz = horizontalAzimuth(compass, axis) ?: 0.0
+        val gyroAz = horizontalAzimuth(gyro, axis) ?: 0.0
+        return wrap180(compassAz + declinationDeg - gyroAz)
+    }
+
+    /**
+     * Heading offset for gyro mode when the phone's [axis] is pointed at something with a known true
+     * azimuth (the sun, the ISS). Null when the pointing axis is too close to vertical to tell.
+     */
+    fun gyroOffsetFromTarget(gyro: FloatArray, axis: PointingAxis, targetAzimuthDeg: Double): Double? {
+        val pointingAz = horizontalAzimuth(gyro, deviceAxis(axis)) ?: return null
+        return wrap180(targetAzimuthDeg - pointingAz)
     }
 
     /** True if the difference between two angles is below [toleranceDeg] (handles 359° vs 1°). */

@@ -52,6 +52,7 @@ import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.data.settings.NotifyTrigger
 import io.github.kevinnortier.isstracker.data.settings.ThemeMode
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
+import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
 import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
@@ -70,6 +71,7 @@ fun SettingsRoute(
         onNotifyTriggerChange = viewModel::setNotifyTrigger,
         onNotifyLeadChange = viewModel::setNotifyLeadMinutes,
         onPointingAxisChange = viewModel::setPointingAxis,
+        onHeadingSourceChange = viewModel::setHeadingSource,
         onThemeChange = viewModel::setThemeMode,
         onNameChange = { viewModel.updateForm(name = it) },
         onLatitudeChange = { viewModel.updateForm(latitude = it) },
@@ -90,6 +92,7 @@ fun SettingsScreen(
     onNotifyTriggerChange: (NotifyTrigger) -> Unit,
     onNotifyLeadChange: (Int) -> Unit,
     onPointingAxisChange: (PointingAxis) -> Unit,
+    onHeadingSourceChange: (HeadingSource) -> Unit,
     onThemeChange: (ThemeMode) -> Unit,
     onNameChange: (String) -> Unit,
     onLatitudeChange: (String) -> Unit,
@@ -205,6 +208,25 @@ fun SettingsScreen(
                     selected = state.settings.pointingAxis == PointingAxis.TOP,
                     onClick = { onPointingAxisChange(PointingAxis.TOP) },
                     label = { Text("Top of phone") },
+                )
+            }
+            Text("Heading from", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Compass: always knows north, but magnets (e.g. MagSafe) and metal disturb it. " +
+                    "Gyro: unaffected by magnets; north is set when Find in sky opens and can be re-aligned " +
+                    "by pointing at the sun or the ISS.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.settings.headingSource == HeadingSource.COMPASS,
+                    onClick = { onHeadingSourceChange(HeadingSource.COMPASS) },
+                    label = { Text("Compass") },
+                )
+                FilterChip(
+                    selected = state.settings.headingSource == HeadingSource.GYRO,
+                    onClick = { onHeadingSourceChange(HeadingSource.GYRO) },
+                    label = { Text("Gyro") },
                 )
             }
 
@@ -380,6 +402,7 @@ private fun SettingsScreenPreview() {
             onNotifyTriggerChange = {},
             onNotifyLeadChange = {},
             onPointingAxisChange = {},
+            onHeadingSourceChange = {},
             onThemeChange = {},
             onNameChange = {},
             onLatitudeChange = {},

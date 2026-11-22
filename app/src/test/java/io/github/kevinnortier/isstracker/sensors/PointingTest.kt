@@ -137,6 +137,54 @@ class PointingTest {
     }
 
     @Test
+    fun `rotating about the vertical adds to azimuths and keeps elevation`() {
+        val rotated = Pointing.rotateAboutVertical(uprightTiltedUp(25.0), 40.0)
+        val p = Pointing.pointing(rotated, PointingAxis.BACK, 0.0)
+        assertEquals(40.0, p.azimuthDeg, 1e-4)
+        assertEquals(25.0, p.elevationDeg, 1e-4)
+    }
+
+    @Test
+    fun `gyro offset from compass recovers the heading difference in any orientation`() {
+        // The gyro frame's "north" is off by 73°: compass = gyro rotated by 73°.
+        for (gyro in listOf(uprightFacingNorth, uprightFacingEast, flatNorth, uprightTiltedUp(60.0))) {
+            val compass = Pointing.rotateAboutVertical(gyro, 73.0)
+            assertEquals(73.0, Pointing.gyroOffsetFromCompass(compass, gyro, declinationDeg = 0.0), 1e-3)
+            // Declination is added on top (compass gives magnetic azimuths).
+            assertEquals(78.0, Pointing.gyroOffsetFromCompass(compass, gyro, declinationDeg = 5.0), 1e-3)
+        }
+    }
+
+    @Test
+    fun `aligned gyro matrix aims like the compass`() {
+        val gyro = uprightFacingEast
+        val compass = Pointing.rotateAboutVertical(gyro, -120.0)
+        val offset = Pointing.gyroOffsetFromCompass(compass, gyro, declinationDeg = 4.0)
+        val aligned = Pointing.rotateAboutVertical(gyro, offset)
+        val target = AzEl(200.0, 15.0)
+        val viaCompass = Pointing.solve(compass, PointingAxis.BACK, target, declinationDeg = 4.0)
+        val viaGyro = Pointing.solve(aligned, PointingAxis.BACK, target, declinationDeg = 0.0)
+        assertEquals(viaCompass.separationDeg, viaGyro.separationDeg, 1e-3)
+        assertEquals(viaCompass.screenX, viaGyro.screenX, 1e-3)
+        assertEquals(viaCompass.screenY, viaGyro.screenY, 1e-3)
+    }
+
+    @Test
+    fun `gyro offset from a target makes the pointing match it`() {
+        // Phone points (in the gyro's arbitrary frame) at azimuth 0; the sun is really at 135°.
+        val offset = Pointing.gyroOffsetFromTarget(uprightTiltedUp(20.0), PointingAxis.BACK, 135.0)!!
+        assertEquals(135.0, offset, 1e-3)
+        val aligned = Pointing.rotateAboutVertical(uprightTiltedUp(20.0), offset)
+        assertEquals(135.0, Pointing.pointing(aligned, PointingAxis.BACK, 0.0).azimuthDeg, 1e-3)
+    }
+
+    @Test
+    fun `aligning to a target is refused when pointing straight up`() {
+        val screenDown = matrix(east, north * -1.0, up * -1.0) // back points at the zenith
+        assertEquals(null, Pointing.gyroOffsetFromTarget(screenDown, PointingAxis.BACK, 90.0))
+    }
+
+    @Test
     fun `smoothing moves part of the way and keeps a valid rotation`() {
         val half = Pointing.smooth(uprightFacingNorth, uprightFacingEast, 0.5f)
         val p = Pointing.pointing(half, PointingAxis.BACK, 0.0)

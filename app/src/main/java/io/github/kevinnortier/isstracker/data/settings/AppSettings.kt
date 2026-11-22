@@ -1,6 +1,7 @@
 package io.github.kevinnortier.isstracker.data.settings
 
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import java.time.Instant
 
@@ -39,6 +40,8 @@ data class AppSettings(
     val notifyLeadMinutes: Int = DEFAULT_NOTIFY_LEAD_MINUTES,
     /** Which side of the phone points at the satellite in the aiming screen. */
     val pointingAxis: PointingAxis = PointingAxis.BACK,
+    /** Where Find in sky gets its heading from: the compass, or the gyro (immune to magnets). */
+    val headingSource: HeadingSource = HeadingSource.COMPASS,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
     companion object {

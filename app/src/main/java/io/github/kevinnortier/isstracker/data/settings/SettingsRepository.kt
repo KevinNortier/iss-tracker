@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -47,6 +48,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val SCHEDULED_REMINDERS = stringSetPreferencesKey("scheduled_reminders")
 
         val POINTING_AXIS = stringPreferencesKey("pointing_axis")
+        val HEADING_SOURCE = stringPreferencesKey("heading_source")
 
         val THEME_MODE = stringPreferencesKey("theme_mode")
     }
@@ -96,6 +98,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setThemeMode(mode: ThemeMode) {
         dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun setHeadingSource(source: HeadingSource) {
+        dataStore.edit { it[Keys.HEADING_SOURCE] = source.name }
     }
 
     suspend fun setPointingAxis(axis: PointingAxis) {
@@ -160,6 +166,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             ?.let { name -> PointingAxis.entries.firstOrNull { it.name == name } }
             ?: PointingAxis.BACK
 
+        val headingSource = this[Keys.HEADING_SOURCE]
+            ?.let { name -> HeadingSource.entries.firstOrNull { it.name == name } }
+            ?: HeadingSource.COMPASS
+
         val theme = this[Keys.THEME_MODE]
             ?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
             ?: ThemeMode.SYSTEM
@@ -172,6 +182,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             notifyTrigger = trigger,
             notifyLeadMinutes = lead,
             pointingAxis = axis,
+            headingSource = headingSource,
             themeMode = theme,
         )
     }
