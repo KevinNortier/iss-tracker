@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -35,10 +37,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -332,36 +344,36 @@ private fun PassRow(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
+        // The bell button (48 dp) is shifted up so its centre lines up with the elevation number,
+        // like the star; "max" stays under the number.
+        val numberLineHeight = MaterialTheme.typography.titleLarge.lineHeight
+        val bellOffset = with(LocalDensity.current) { numberLineHeight.toDp() / 2 } - 24.dp
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    "${Format.time(pass.rise.time)} → ${Format.time(pass.apex.time)} → ${Format.time(pass.set.time)}",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    "${Format.compassPoint(pass.rise.azimuthDeg)} → ${Format.compassPoint(pass.set.azimuthDeg)} · " +
-                        Format.passDuration(pass.duration),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            if (pass.visible) {
-                VisibleIcon()
-                Spacer(Modifier.size(12.dp))
+                PassTimes(pass)
+                PassDirections(pass)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    Format.degrees0(pass.apex.elevationDeg),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                // The star sits on the same line as the elevation, centred on the number.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (pass.visible) {
+                        VisibleIcon()
+                        Spacer(Modifier.size(8.dp))
+                    }
+                    Text(
+                        Format.degrees0(pass.apex.elevationDeg),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Text("max", style = MaterialTheme.typography.bodySmall)
             }
-            IconButton(onClick = onToggleReminder) {
+            IconButton(onClick = onToggleReminder, modifier = Modifier.offset(y = bellOffset)) {
                 Icon(
                     if (reminderOn) Icons.Filled.Notifications else Icons.Outlined.Notifications,
                     contentDescription = if (reminderOn) "Turn off reminder" else "Remind me about this pass",
@@ -372,13 +384,67 @@ private fun PassRow(
     }
 }
 
+/** "rise ↗ highest ↘ set": the arrows tilt up towards the highest point and down towards the set. */
+@Composable
+private fun PassTimes(pass: Pass) {
+    // The arrow icon is mirrored in right-to-left layouts, so the tilt direction flips with it.
+    val tilt = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -45f else 45f
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val style = MaterialTheme.typography.titleMedium
+        Text(Format.time(pass.rise.time), style = style)
+        TiltedArrow(rotation = -tilt)
+        Text(Format.time(pass.apex.time), style = style)
+        TiltedArrow(rotation = tilt)
+        Text(Format.time(pass.set.time), style = style)
+    }
+}
+
+/** "WSW → ESE · 10 min 21 s": where it rises and sets, and how long it's up. */
+@Composable
+private fun PassDirections(pass: Pass) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val style = MaterialTheme.typography.bodySmall
+        Text(Format.compassPoint(pass.rise.azimuthDeg), style = style)
+        TiltedArrow(rotation = 0f, size = 12.dp, gap = 4.dp)
+        Text("${Format.compassPoint(pass.set.azimuthDeg)} · ${Format.passDuration(pass.duration)}", style = style)
+    }
+}
+
+@Composable
+private fun TiltedArrow(rotation: Float, size: Dp = 16.dp, gap: Dp = 6.dp) {
+    Icon(
+        Icons.AutoMirrored.Filled.ArrowForward,
+        contentDescription = null, // the row's description already says "from … to …"
+        modifier = Modifier
+            .padding(horizontal = gap)
+            .size(size)
+            .rotate(rotation),
+    )
+}
+
+/**
+ * The "→" glyph is drawn around the middle of the lowercase letters, which looks low next to
+ * digits and capitals. Raising it a little centres it on them.
+ */
+private fun withCenteredArrows(text: String): AnnotatedString = buildAnnotatedString {
+    text.split('→').forEachIndexed { i, part ->
+        if (i > 0) withStyle(SpanStyle(baselineShift = BaselineShift(ARROW_RAISE))) { append('→') }
+        append(part)
+    }
+}
+
+/** How far to raise arrows, as a fraction of the font size. */
+private const val ARROW_RAISE = 0.12f
+
 @Composable
 private fun Footer(state: PassesUiState, locationSummary: String) {
     Column(Modifier.padding(top = 16.dp)) {
         val tleAge = state.tleEpoch?.let { Format.duration(Duration.between(it, state.now)) + " old" } ?: "–"
         Text(
-            "Passes above ${Format.degrees0(state.minElevationDeg)}, 10 days ahead. " +
-                "Times are rise → highest → set.",
+            withCenteredArrows(
+                "Passes above ${Format.degrees0(state.minElevationDeg)}, 10 days ahead. " +
+                    "Times are rise → highest → set.",
+            ),
             style = MaterialTheme.typography.bodySmall,
         )
         Text("Orbit data: $tleAge. Location: $locationSummary.", style = MaterialTheme.typography.bodySmall)
