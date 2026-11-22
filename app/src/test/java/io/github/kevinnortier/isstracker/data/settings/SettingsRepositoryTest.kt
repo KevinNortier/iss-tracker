@@ -1,6 +1,7 @@
 package io.github.kevinnortier.isstracker.data.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import io.github.kevinnortier.isstracker.sensors.HeadingSource
@@ -125,6 +126,45 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `tracks the ISS until the user changes the list`() = runBlocking {
+        assertEquals(listOf(Satellite.ISS), newRepository().trackedSatellites.first())
+    }
+
+    @Test
+    fun `removing every satellite gives an empty list, not the default`() = runBlocking {
+        val repo = newRepository()
+        repo.removeTrackedSatellite(Satellite.ISS.noradId)
+        assertEquals(emptyList<Satellite>(), repo.trackedSatellites.first())
+    }
+
+    @Test
+    fun `adding appends, re-adding updates in place, and the list is capped`() = runBlocking {
+        val repo = newRepository()
+        val so50 = Satellite(27607, "SO-50")
+        assertEquals(true, repo.addTrackedSatellite(so50))
+        assertEquals(listOf(Satellite.ISS, so50), repo.trackedSatellites.first())
+        // Same NORAD ID again: updated, not duplicated.
+        repo.addTrackedSatellite(Satellite(25544, "ISS (ZARYA)", bright = true))
+        assertEquals(listOf(Satellite(25544, "ISS (ZARYA)", bright = true), so50), repo.trackedSatellites.first())
+        // Fill up to the limit; the next one is refused.
+        for (id in 1..(Satellite.MAX_TRACKED - 2)) assertEquals(true, repo.addTrackedSatellite(Satellite(id, "S$id")))
+        assertEquals(false, repo.addTrackedSatellite(Satellite(99999, "one too many")))
+        assertEquals(Satellite.MAX_TRACKED, repo.trackedSatellites.first().size)
+    }
+
+    @Test
+    fun `removing a satellite also forgets its reminders`() = runBlocking {
+        val repo = newRepository()
+        repo.addTrackedSatellite(Satellite(27607, "SO-50"))
+        val issPass = PassKey(25544, 1_000L)
+        val soPass = PassKey(27607, 2_000L)
+        repo.setSelectedPasses(setOf(issPass, soPass))
+        repo.removeTrackedSatellite(27607)
+        assertEquals(listOf(Satellite.ISS), repo.trackedSatellites.first())
+        assertEquals(setOf(issPass), repo.selectedPasses.first())
+    }
+
+    @Test
     fun `heading source defaults to compass and can be changed`() = runBlocking {
         val repo = newRepository()
         assertEquals(HeadingSource.COMPASS, repo.settings.first().headingSource)
@@ -155,5 +195,15 @@ class SettingsRepositoryTest {
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         val settings = runBlocking { newRepository().settings.first() }
         assertEquals(LocationMode.SAVED, settings.locationMode)
+    }
+
+    @Test
+    fun `pass filter defaults to all and is stored`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(emptySet<Int>(), repo.passFilter.first())
+        repo.setPassFilter(setOf(25544, 48274))
+        assertEquals(setOf(25544, 48274), repo.passFilter.first())
+        repo.setPassFilter(emptySet())
+        assertEquals(emptySet<Int>(), repo.passFilter.first())
     }
 }

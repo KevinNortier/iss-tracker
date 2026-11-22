@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import io.github.kevinnortier.isstracker.data.settings.ThemeMode
 
@@ -15,6 +17,9 @@ fun ThemeMode.isDark(): Boolean = when (this) {
     ThemeMode.LIGHT -> false
     ThemeMode.DARK, ThemeMode.NIGHT -> true
 }
+
+/** True while the red night theme is active (components that use their own colours switch to red). */
+val LocalNightMode = staticCompositionLocalOf { false }
 
 /**
  * The app theme. Light and dark use Material You colours from the wallpaper (always available,
@@ -31,5 +36,7 @@ fun ISSTrackerTheme(
         mode.isDark() -> dynamicDarkColorScheme(context)
         else -> dynamicLightColorScheme(context)
     }
-    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+    CompositionLocalProvider(LocalNightMode provides (mode == ThemeMode.NIGHT)) {
+        MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+    }
 }

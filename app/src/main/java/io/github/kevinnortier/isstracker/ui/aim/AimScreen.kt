@@ -49,15 +49,18 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.sensors.AimSolution
 import io.github.kevinnortier.isstracker.sensors.CompassAccuracy
 import io.github.kevinnortier.isstracker.sensors.HeadingSource
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import io.github.kevinnortier.isstracker.ui.DetailRow
 import io.github.kevinnortier.isstracker.ui.Format
+import io.github.kevinnortier.isstracker.ui.SatelliteDot
 import java.time.Duration
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -69,7 +72,11 @@ private const val RING_RANGE_DEG = 45.0
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = AimViewModel.Factory)) {
+fun AimRoute(
+    noradId: Int,
+    onBack: () -> Unit,
+    viewModel: AimViewModel = viewModel(key = "aim-$noradId", factory = AimViewModel.factory(noradId)),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     KeepScreenOnInPortrait()
     LockOnFeedback(state.onTarget)
@@ -78,7 +85,7 @@ fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = A
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Find the ${state.satelliteName}") },
+                title = { Text("Find in sky") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -95,6 +102,7 @@ fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = A
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (state.tracked.size > 1) SatelliteSelector(state.tracked, state.noradId, viewModel::selectSatellite)
             AxisSelector(state.axis, viewModel::setAxis)
             HeadingSelector(state.headingSource, viewModel::setHeadingSource)
             when {
@@ -111,7 +119,7 @@ fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = A
                         GyroAlignmentCard(
                             state = state,
                             onAlignToSun = viewModel::alignToSun,
-                            onAlignToIss = viewModel::alignToIss,
+                            onAlignToSatellite = viewModel::alignToSatellite,
                             onAlignFromCompass = viewModel::alignFromCompass,
                         )
                     } else {
@@ -126,6 +134,23 @@ fun AimRoute(onBack: () -> Unit, viewModel: AimViewModel = viewModel(factory = A
                     }
                     Numbers(state)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SatelliteSelector(tracked: List<Satellite>, selectedId: Int, onSelect: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Satellite", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            tracked.forEach { s ->
+                FilterChip(
+                    selected = s.noradId == selectedId,
+                    onClick = { onSelect(s.noradId) },
+                    label = { Text(s.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = { SatelliteDot(s.noradId, size = 8.dp) },
+                )
             }
         }
     }
@@ -174,7 +199,7 @@ private fun HeadingSelector(source: HeadingSource, onChange: (HeadingSource) -> 
 private fun GyroAlignmentCard(
     state: AimUiState,
     onAlignToSun: () -> Unit,
-    onAlignToIss: () -> Unit,
+    onAlignToSatellite: () -> Unit,
     onAlignFromCompass: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
@@ -190,7 +215,7 @@ private fun GyroAlignmentCard(
                         AlignMethod.COMPASS_AUTO -> "from the compass when this screen opened"
                         AlignMethod.COMPASS -> "from the compass"
                         AlignMethod.SUN -> "by pointing at the sun"
-                        AlignMethod.ISS -> "by pointing at the ISS"
+                        AlignMethod.SATELLITE -> "by pointing at ${alignment.satelliteName ?: "the satellite"}"
                     }
                     "North was set $how ($age ago). Magnets don't affect it; it may drift slowly, so re-align " +
                         "now and then."
@@ -199,13 +224,17 @@ private fun GyroAlignmentCard(
             )
             Text(
                 "To align: point the ${if (state.axis == PointingAxis.BACK) "back" else "top"} of the phone " +
-                    "at the sun or the ISS and tap the button.",
+                    "at the sun" + (if (state.bright) " or ${state.satelliteName}" else "") + " and tap the button.",
                 style = MaterialTheme.typography.bodySmall,
             )
             state.alignMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = onAlignToSun, enabled = state.canAlignToSun) { Text("Align to sun") }
-                FilledTonalButton(onClick = onAlignToIss, enabled = state.canAlignToIss) { Text("Align to ISS") }
+                if (state.bright) {
+                    FilledTonalButton(onClick = onAlignToSatellite, enabled = state.canAlignToSatellite) {
+                        Text("Align to ${state.satelliteName}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
                 FilledTonalButton(onClick = onAlignFromCompass) { Text("Align from compass") }
             }
             if (!state.canAlignToSun) {
@@ -235,7 +264,7 @@ private fun InterferenceWarning(fieldMicroTesla: Double?) {
 @Composable
 private fun TargetBanner(state: AimUiState) {
     when (val target = state.target) {
-        null -> Text("No upcoming pass found.")
+        null -> Text("No pass of ${state.satelliteName} in the next 2 days.")
         is AimTarget.Live -> Text(
             "${state.satelliteName} is above the horizon" +
                 (target.pass?.let { " — sets in ${Format.countdown(Duration.between(state.now, it.set.time))}" } ?: ""),

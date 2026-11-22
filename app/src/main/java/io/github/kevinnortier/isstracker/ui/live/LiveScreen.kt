@@ -43,10 +43,11 @@ import java.time.Duration
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveRoute(
+    noradId: Int,
     onBack: () -> Unit,
     onOpenAim: () -> Unit,
     onOpenSettings: () -> Unit,
-    viewModel: LiveViewModel = viewModel(factory = LiveViewModel.Factory),
+    viewModel: LiveViewModel = viewModel(key = "live-$noradId", factory = LiveViewModel.factory(noradId)),
     locationViewModel: LocationViewModel = viewModel(factory = LocationViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -94,11 +95,11 @@ private fun PositionCard(state: LiveUiState, onOpenAim: () -> Unit) {
                     color = MaterialTheme.colorScheme.error,
                 )
                 obs != null -> {
-                    ObservationDetails(obs)
+                    ObservationDetails(obs, state.bright)
                     Spacer(Modifier.height(12.dp))
                     Button(onClick = onOpenAim) { Text("Find in sky") }
                 }
-                !state.hasObserver -> Text("Choose a location below to see where the ISS is.")
+                !state.hasObserver -> Text("Choose a location below to see where ${state.satelliteName} is.")
                 state.tleStatus is TleStatus.Failed -> Text("No orbit data yet.")
                 else -> Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -111,7 +112,7 @@ private fun PositionCard(state: LiveUiState, onOpenAim: () -> Unit) {
 }
 
 @Composable
-private fun ObservationDetails(obs: Observation) {
+private fun ObservationDetails(obs: Observation, bright: Boolean) {
     val look = obs.look
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         BigValue(label = "Azimuth", value = Format.degrees1(look.azimuthDeg), sub = Format.compassPoint(look.azimuthDeg))
@@ -129,7 +130,11 @@ private fun ObservationDetails(obs: Observation) {
     )
     DetailRow("In sunlight", if (obs.sunlit) "Yes" else "No (Earth's shadow)")
     DetailRow("Sun elevation", Format.degrees1(obs.sunElevationDeg))
-    DetailRow("Visible to the eye", if (obs.visible) "Yes" else "No")
+    if (bright) {
+        DetailRow("Visible to the eye", if (obs.visible) "Yes" else "No")
+    } else {
+        DetailRow("Visible to the eye", if (obs.visible) "Sunlit, but likely too faint" else "No")
+    }
 }
 
 @Composable

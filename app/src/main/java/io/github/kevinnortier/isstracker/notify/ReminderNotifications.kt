@@ -81,7 +81,7 @@ data class ReminderInfo(
             val key = intent.getStringExtra(EXTRA_KEY)?.let(PassKey::decode) ?: return null
             return ReminderInfo(
                 key = key,
-                satelliteName = intent.getStringExtra(EXTRA_NAME) ?: "ISS",
+                satelliteName = intent.getStringExtra(EXTRA_NAME) ?: "Satellite",
                 trigger = intent.getStringExtra(EXTRA_TRIGGER)
                     ?.let { name -> NotifyTrigger.entries.firstOrNull { it.name == name } }
                     ?: NotifyTrigger.RISE,

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.kevinnortier.isstracker.AppContainer
 import io.github.kevinnortier.isstracker.IssTrackerApp
+import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.data.CachedTle
 import io.github.kevinnortier.isstracker.data.TleRepository
 import io.github.kevinnortier.isstracker.data.settings.resolveObserver
@@ -35,6 +36,8 @@ sealed interface TleStatus {
 
 data class LiveUiState(
     val satelliteName: String,
+    /** Bright enough to see with the eye when sunlit. */
+    val bright: Boolean = false,
     val tleStatus: TleStatus = TleStatus.Loading,
     /** Message about the last TLE refresh attempt (error or "already up to date"), if any. */
     val refreshMessage: String? = null,
@@ -48,6 +51,7 @@ data class LiveUiState(
 
 class LiveViewModel(
     private val container: AppContainer,
+    private val noradId: Int,
     private val clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
 
@@ -61,7 +65,10 @@ class LiveViewModel(
     private data class TrackerState(val tracker: SatelliteTracker?, val error: String?)
 
     private val refreshState = MutableStateFlow(RefreshState())
-    private val tle = container.tleRepository.latest(container.satellite.noradId)
+    private val tle = container.tleRepository.latest(noradId)
+    private val satellite = container.settingsRepository.trackedSatellites
+        .map { list -> list.firstOrNull { it.noradId == noradId } ?: Satellite(noradId, "#$noradId") }
+        .distinctUntilChanged()
     private val observerLocation = container.settingsRepository.settings
         .map { it.resolveObserver()?.location }
         .distinctUntilChanged()
@@ -79,8 +86,8 @@ class LiveViewModel(
     }
 
     val uiState: StateFlow<LiveUiState> = combine(
-        tle, refreshState, observerLocation, trackerState, secondTicker(clock),
-    ) { cached, refresh, location, trackerState, now ->
+        combine(tle, satellite, ::Pair), refreshState, observerLocation, trackerState, secondTicker(clock),
+    ) { (cached, satellite), refresh, location, trackerState, now ->
         var calculationError = trackerState.error
         val observation = trackerState.tracker?.let { tracker ->
             try {
@@ -91,7 +98,8 @@ class LiveViewModel(
             }
         }
         LiveUiState(
-            satelliteName = container.satellite.displayName,
+            satelliteName = satellite.displayName,
+            bright = satellite.bright,
             tleStatus = when {
                 cached != null -> TleStatus.Loaded(cached)
                 refresh.failure != null -> TleStatus.Failed(refresh.failure)
@@ -107,7 +115,7 @@ class LiveViewModel(
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        LiveUiState(satelliteName = container.satellite.displayName),
+        LiveUiState(satelliteName = ""),
     )
 
     init {
@@ -120,7 +128,7 @@ class LiveViewModel(
         viewModelScope.launch {
             refreshState.update { it.copy(refreshing = true, message = null) }
             try {
-                val result = container.tleRepository.getTle(container.satellite.noradId, forceRefresh)
+                val result = container.tleRepository.getTle(noradId, forceRefresh)
                 val message = when {
                     result.refreshError != null ->
                         "Download failed, using saved data: ${result.refreshError.message}"
@@ -137,13 +145,13 @@ class LiveViewModel(
     }
 
     companion object {
-        /** TLEs older than this are getting inaccurate (the ISS reboosts regularly). */
+        /** TLEs older than this are getting inaccurate (low orbits change quickly, the ISS reboosts regularly). */
         val TLE_OLD_AFTER: Duration = Duration.ofDays(3)
 
-        val Factory: ViewModelProvider.Factory = viewModelFactory {
+        fun factory(noradId: Int): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as IssTrackerApp
-                LiveViewModel(app.container)
+                LiveViewModel(app.container, noradId)
             }
         }
     }

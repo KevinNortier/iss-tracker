@@ -223,7 +223,7 @@ object Pointing {
 
     /**
      * Heading offset for gyro mode when the phone's [axis] is pointed at something with a known true
-     * azimuth (the sun, the ISS). Null when the pointing axis is too close to vertical to tell.
+     * azimuth (the sun, a bright satellite). Null when the pointing axis is too close to vertical to tell.
      */
     fun gyroOffsetFromTarget(gyro: FloatArray, axis: PointingAxis, targetAzimuthDeg: Double): Double? {
         val pointingAz = horizontalAzimuth(gyro, deviceAxis(axis)) ?: return null

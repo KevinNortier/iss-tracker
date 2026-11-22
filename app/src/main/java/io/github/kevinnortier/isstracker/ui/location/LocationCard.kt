@@ -129,7 +129,7 @@ private fun CurrentLocationContent(
 
     if (state.permission == LocationPermission.NONE) {
         Text(
-            "Location access is needed to calculate where the ISS is from where you are. " +
+            "Location access is needed to calculate the passes for where you are. " +
                 "Your location stays on this phone.",
         )
         if (permissionDenied) {

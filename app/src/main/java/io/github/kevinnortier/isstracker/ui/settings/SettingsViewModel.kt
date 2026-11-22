@@ -38,14 +38,20 @@ data class SavedLocationForm(
 data class SettingsUiState(
     val settings: AppSettings = AppSettings(),
     val form: SavedLocationForm = SavedLocationForm(),
+    /** Names of the tracked satellites, for the summary at the top. */
+    val trackedNames: List<String> = emptyList(),
 )
 
 class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
 
     private val form = MutableStateFlow(SavedLocationForm())
 
-    val uiState: StateFlow<SettingsUiState> = combine(repository.settings, form) { settings, form ->
-        SettingsUiState(settings, form)
+    val uiState: StateFlow<SettingsUiState> = combine(
+        repository.settings,
+        form,
+        repository.trackedSatellites,
+    ) { settings, form, tracked ->
+        SettingsUiState(settings, form, tracked.map { it.displayName })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     init {

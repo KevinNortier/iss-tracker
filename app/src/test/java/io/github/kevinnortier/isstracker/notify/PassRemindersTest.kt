@@ -111,6 +111,17 @@ class PassRemindersTest {
     }
 
     @Test
+    fun `selection is split by satellite, untracked satellites separately`() {
+        val iss1 = PassKey(25544, 1_000L)
+        val iss2 = PassKey(25544, 2_000L)
+        val so50 = PassKey(27607, 3_000L)
+        val removed = PassKey(11111, 4_000L)
+        val split = splitSelection(setOf(iss1, iss2, so50, removed), trackedIds = setOf(25544, 27607))
+        assertEquals(mapOf(25544 to setOf(iss1, iss2), 27607 to setOf(so50)), split.bySatellite)
+        assertEquals(setOf(removed), split.untracked)
+    }
+
+    @Test
     fun `notification ids are stable and distinct per pass`() {
         val a = ReminderNotifications.notificationId(key(0.0))
         val b = ReminderNotifications.notificationId(key(92.0))

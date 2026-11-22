@@ -111,6 +111,22 @@ class TleRepository(
     suspend fun getCached(noradId: Int): CachedTle? =
         mutex.withLock { readCache(noradId) }?.also { publish(noradId, it) }
 
+    /**
+     * Stores a TLE that was just downloaded elsewhere (e.g. while browsing the catalog), so adding
+     * a satellite doesn't download it again.
+     */
+    suspend fun put(tle: Tle) = mutex.withLock {
+        val cached = CachedTle(tle, clock.instant().truncatedTo(ChronoUnit.MILLIS))
+        writeCache(tle.noradId, cached)
+        publish(tle.noradId, cached)
+    }
+
+    /** Forgets the cached TLE of a satellite that is no longer tracked. */
+    suspend fun delete(noradId: Int) = mutex.withLock {
+        withContext(Dispatchers.IO) { cacheFile(noradId).delete() }
+        latest.update { it - noradId }
+    }
+
     private suspend fun downloadAndParse(noradId: Int): Tle {
         val text = downloader.download(noradId)
         val tle = try {

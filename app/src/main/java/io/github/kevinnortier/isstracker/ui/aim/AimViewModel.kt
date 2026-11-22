@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.kevinnortier.isstracker.AppContainer
 import io.github.kevinnortier.isstracker.IssTrackerApp
+import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.data.settings.resolveObserver
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import io.github.kevinnortier.isstracker.orbit.LookAngles
@@ -67,13 +68,24 @@ fun chooseTarget(look: LookAngles, passes: List<Pass>, now: Instant): AimTarget?
 }
 
 /** How the gyro heading was aligned to north. */
-enum class AlignMethod { COMPASS_AUTO, COMPASS, SUN, ISS }
+enum class AlignMethod { COMPASS_AUTO, COMPASS, SUN, SATELLITE }
 
 /** Gyro-mode heading alignment: true azimuth = gyro azimuth + [offsetDeg]. */
-data class HeadingAlignment(val offsetDeg: Double, val method: AlignMethod, val time: Instant)
+data class HeadingAlignment(
+    val offsetDeg: Double,
+    val method: AlignMethod,
+    val time: Instant,
+    /** The satellite pointed at, for [AlignMethod.SATELLITE]. */
+    val satelliteName: String? = null,
+)
 
 data class AimUiState(
+    val noradId: Int,
     val satelliteName: String,
+    /** Bright enough to see, so it can be used to align the gyro heading. */
+    val bright: Boolean = false,
+    /** Tracked satellites to choose from. */
+    val tracked: List<Satellite> = emptyList(),
     val sensorAvailable: Boolean = true,
     val axis: PointingAxis = PointingAxis.BACK,
     val headingSource: HeadingSource = HeadingSource.COMPASS,
@@ -86,7 +98,7 @@ data class AimUiState(
     /** Where the sun is, and whether it's a good alignment target right now. */
     val sun: AzEl? = null,
     val canAlignToSun: Boolean = false,
-    val canAlignToIss: Boolean = false,
+    val canAlignToSatellite: Boolean = false,
     /** Why aiming isn't possible (no location / orbit data), if so. */
     val problem: String? = null,
     val target: AimTarget? = null,
@@ -105,7 +117,7 @@ data class AimUiState(
         /** Within this many degrees counts as "on target". */
         const val ON_TARGET_DEG = 5.0
 
-        /** Aligning to the sun or the ISS needs it clearly above the horizon but not overhead. */
+        /** Aligning to the sun or a satellite needs it clearly above the horizon but not overhead. */
         val ALIGN_ELEVATION_RANGE = 2.0..75.0
     }
 }
@@ -113,6 +125,7 @@ data class AimUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class AimViewModel(
     private val container: AppContainer,
+    noradId: Int,
     private val clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
 
@@ -127,8 +140,17 @@ class AimViewModel(
     private val settings = container.settingsRepository.settings
     private val sensor = container.orientationSensor
 
+    /** The satellite being aimed at; can be switched on the screen. */
+    private val selectedId = MutableStateFlow(noradId)
+    private val tracked = container.settingsRepository.trackedSatellites
+
+    /** The selected satellite (a placeholder if it's not tracked any more). */
+    private val selected: Flow<Satellite> = combine(selectedId, tracked) { id, list ->
+        list.firstOrNull { it.noradId == id } ?: Satellite(id, "#$id")
+    }.distinctUntilChanged()
+
     private val inputs: Flow<Pair<Tle?, Pair<GeodeticLocation?, Double>>> = combine(
-        container.tleRepository.latest(container.satellite.noradId).map { it?.tle }.distinctUntilChanged(),
+        selectedId.flatMapLatest { id -> container.tleRepository.latest(id) }.map { it?.tle }.distinctUntilChanged(),
         settings.map { it.resolveObserver()?.location to it.minElevationDeg }.distinctUntilChanged(),
     ) { tle, observer -> tle to observer }
 
@@ -169,13 +191,28 @@ class AimViewModel(
     private var lastReading: OrientationReading? = null
     private var lastState: AimUiState? = null
 
+    private data class Setup(
+        val axis: PointingAxis,
+        val source: HeadingSource,
+        val satellite: Satellite,
+        val tracked: List<Satellite>,
+    )
+
+    private val setup: Flow<Setup> = combine(
+        settings.map { it.pointingAxis }.distinctUntilChanged(),
+        headingSource,
+        selected,
+        tracked,
+        ::Setup,
+    )
+
     val uiState: StateFlow<AimUiState> = combine(
-        combine(settings.map { it.pointingAxis }.distinctUntilChanged(), headingSource, ::Pair),
+        setup,
         geometry,
         readings,
         combine(alignment, alignMessage, ::Pair),
         secondTicker(clock), // keeps the target moving even without sensor readings
-    ) { (axis, source), geo, reading, (align, message), _ ->
+    ) { (axis, source, satellite, trackedList), geo, reading, (align, message), _ ->
         val now = clock.instant()
         lastReading = reading
         val target = geo.predictor?.let { p ->
@@ -211,7 +248,10 @@ class AimViewModel(
             AzEl(az, el)
         }
         AimUiState(
-            satelliteName = container.satellite.displayName,
+            noradId = satellite.noradId,
+            satelliteName = satellite.displayName,
+            bright = satellite.bright,
+            tracked = trackedList,
             sensorAvailable = sensor.isAvailable,
             axis = axis,
             headingSource = source,
@@ -220,7 +260,8 @@ class AimViewModel(
             alignMessage = message,
             sun = sun,
             canAlignToSun = sun != null && sun.elevationDeg in AimUiState.ALIGN_ELEVATION_RANGE,
-            canAlignToIss = target is AimTarget.Live && target.direction.elevationDeg in AimUiState.ALIGN_ELEVATION_RANGE,
+            canAlignToSatellite = satellite.bright && target is AimTarget.Live &&
+                target.direction.elevationDeg in AimUiState.ALIGN_ELEVATION_RANGE,
             problem = geo.problem,
             target = target,
             aim = aim,
@@ -234,8 +275,20 @@ class AimViewModel(
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(2_000), // stops the sensors shortly after leaving the screen
-        AimUiState(satelliteName = container.satellite.displayName),
+        AimUiState(noradId = noradId, satelliteName = ""),
     )
+
+    init {
+        // Make sure the cached orbit data is loaded (and downloaded if missing) for the selected satellite.
+        viewModelScope.launch {
+            selectedId.collect { id -> runCatching { container.tleRepository.getTle(id) } }
+        }
+    }
+
+    /** Aims at another tracked satellite. The gyro alignment stays valid (it's about the phone, not the target). */
+    fun selectSatellite(noradId: Int) {
+        selectedId.value = noradId
+    }
 
     fun setAxis(axis: PointingAxis) {
         viewModelScope.launch { container.settingsRepository.setPointingAxis(axis) }
@@ -259,25 +312,26 @@ class AimViewModel(
         alignToDirection(sun, AlignMethod.SUN)
     }
 
-    /** Gyro mode: the user points the phone at the ISS (visible pass); its known azimuth sets north. */
-    fun alignToIss() {
-        val target = lastState?.target as? AimTarget.Live ?: return
-        alignToDirection(target.direction, AlignMethod.ISS)
+    /** Gyro mode: the user points the phone at the (bright, visible) satellite; its known azimuth sets north. */
+    fun alignToSatellite() {
+        val state = lastState ?: return
+        val target = state.target as? AimTarget.Live ?: return
+        alignToDirection(target.direction, AlignMethod.SATELLITE, state.satelliteName)
     }
 
-    private fun alignToDirection(direction: AzEl, method: AlignMethod) {
+    private fun alignToDirection(direction: AzEl, method: AlignMethod, satelliteName: String? = null) {
         val reading = lastReading ?: return
         val axis = lastState?.axis ?: PointingAxis.BACK
         val offset = Pointing.gyroOffsetFromTarget(reading.rotationMatrix, axis, direction.azimuthDeg)
         if (offset == null) {
             alignMessage.value = "Can't align while pointing almost straight up or down."
         } else {
-            setAlignment(offset, method)
+            setAlignment(offset, method, satelliteName)
         }
     }
 
-    private fun setAlignment(offset: Double, method: AlignMethod) {
-        alignment.value = HeadingAlignment(offset, method, clock.instant())
+    private fun setAlignment(offset: Double, method: AlignMethod, satelliteName: String? = null) {
+        alignment.value = HeadingAlignment(offset, method, clock.instant(), satelliteName)
         alignMessage.value = null
     }
 
@@ -289,10 +343,10 @@ class AimViewModel(
     ).declination.toDouble()
 
     companion object {
-        val Factory: ViewModelProvider.Factory = viewModelFactory {
+        fun factory(noradId: Int): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as IssTrackerApp
-                AimViewModel(app.container)
+                AimViewModel(app.container, noradId)
             }
         }
     }

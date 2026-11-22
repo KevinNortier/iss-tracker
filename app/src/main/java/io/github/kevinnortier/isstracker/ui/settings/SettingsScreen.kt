@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,10 +61,12 @@ import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
 @Composable
 fun SettingsRoute(
     onBack: () -> Unit,
+    onOpenSatellites: () -> Unit,
     viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     SettingsScreen(
+        onOpenSatellites = onOpenSatellites,
         state = state,
         onBack = onBack,
         onLocationModeChange = viewModel::setLocationMode,
@@ -85,6 +88,7 @@ fun SettingsRoute(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    onOpenSatellites: () -> Unit,
     state: SettingsUiState,
     onBack: () -> Unit,
     onLocationModeChange: (LocationMode) -> Unit,
@@ -122,6 +126,19 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Text("Satellites", style = MaterialTheme.typography.titleLarge)
+            Text(
+                when (state.trackedNames.size) {
+                    0 -> "No satellites tracked."
+                    in 1..3 -> "Tracking ${state.trackedNames.joinToString(", ")}."
+                    else -> "Tracking ${state.trackedNames.take(3).joinToString(", ")} and ${state.trackedNames.size - 3} more."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            FilledTonalButton(onClick = onOpenSatellites) { Text("Manage satellites") }
+
+            HorizontalDivider()
+
             Text("Location", style = MaterialTheme.typography.titleLarge)
             Column(Modifier.selectableGroup()) {
                 ModeOption(
@@ -156,7 +173,7 @@ fun SettingsScreen(
             }
 
             Text(
-                "Your location is only used on this phone to calculate where the ISS is. " +
+                "Your location is only used on this phone to calculate where the satellites are. " +
                     "It is never sent anywhere.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -166,7 +183,7 @@ fun SettingsScreen(
             Text("Passes", style = MaterialTheme.typography.titleLarge)
             Text("Minimum elevation", style = MaterialTheme.typography.bodyLarge)
             Text(
-                "A pass only counts while the ISS is at least this high above the horizon. " +
+                "A pass only counts while the satellite is at least this high above the horizon. " +
                     "0° shows every pass; higher values hide low passes behind trees and buildings.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -192,7 +209,7 @@ fun SettingsScreen(
             HorizontalDivider()
 
             Text("Find in sky", style = MaterialTheme.typography.titleLarge)
-            Text("Point at the ISS with", style = MaterialTheme.typography.bodyLarge)
+            Text("Point with", style = MaterialTheme.typography.bodyLarge)
             Text(
                 "Back: hold the phone like a camera. Top: e.g. with the phone strapped along an antenna, " +
                     "binoculars or a camera.",
@@ -214,7 +231,7 @@ fun SettingsScreen(
             Text(
                 "Compass: always knows north, but magnets (e.g. MagSafe) and metal disturb it. " +
                     "Gyro: unaffected by magnets; north is set when Find in sky opens and can be re-aligned " +
-                    "by pointing at the sun or the ISS.",
+                    "by pointing at the sun or a bright satellite.",
                 style = MaterialTheme.typography.bodySmall,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -395,6 +412,7 @@ private fun NumberField(
 private fun SettingsScreenPreview() {
     ISSTrackerTheme {
         SettingsScreen(
+            onOpenSatellites = {},
             state = SettingsUiState(form = SavedLocationForm(name = "Greenwich", latitude = "51.4769", longitude = "-0.0005")),
             onBack = {},
             onLocationModeChange = {},
