@@ -14,7 +14,7 @@ val signingProperties: Properties? = rootProject.file("keystore.properties")
 
 // The app version: change only this. versionCode is derived from it as
 // MAJOR * 10000 + MINOR * 100 + PATCH (1.0.0 -> 10000, 1.2.3 -> 10203), so it always increases.
-val appVersion = "1.0.0"
+val appVersion = "1.1.0"
 val appVersionCode: Int = run {
     val parts = appVersion.split('.').map { it.toIntOrNull() }
     require(parts.size == 3 && parts.all { it != null && it in 0..99 } && parts[0]!! >= 1) {
