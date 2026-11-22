@@ -30,10 +30,7 @@ google-services.json
 *.iml
 *.ipr
 *.iws
-/.idea/*
-# Keep shared code style and run configurations
-!/.idea/codeStyles/
-!/.idea/runConfigurations/
+/.idea/
 
 # --- Claude Code personal settings ---
 .claude/settings.local.json
