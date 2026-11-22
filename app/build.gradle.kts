@@ -81,6 +81,13 @@ android {
     }
 }
 
+// After a release build, copy the APK to <project>/release/ (git-ignored) so it's easy to find.
+val copyReleaseApk by tasks.registering(Copy::class) {
+    from(layout.buildDirectory.dir("outputs/apk/release")) { include("*.apk") }
+    into(rootProject.layout.projectDirectory.dir("release"))
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(copyReleaseApk) }
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

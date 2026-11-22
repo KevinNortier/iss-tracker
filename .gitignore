@@ -18,6 +18,8 @@ local.properties
 .externalNativeBuild/
 .cxx/
 output-metadata.json
+# Release APKs copied here by the build (app/build.gradle.kts, copyReleaseApk)
+/release/
 
 # --- Signing keys & credentials (never commit) ---
 *.jks

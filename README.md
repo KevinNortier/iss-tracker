@@ -156,7 +156,7 @@ The version is set in one place, `appVersion` in `app/build.gradle.kts` (semanti
 
 `./gradlew assembleRelease` signs the APK if a `keystore.properties` file exists in the project root
 (git-ignored) with `storeFile`, `storePassword`, `keyAlias` and `keyPassword`. Without it the release
-APK is built unsigned.
+APK is built unsigned. The APK is also copied to `release/` in the project root (git-ignored).
 
 ### Regenerating the test reference data
 
