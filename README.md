@@ -25,6 +25,42 @@ and keeps your location on your phone.
 - **Themes** — system, light, dark, and a red-on-black night mode that keeps your eyes dark-adapted.
 - **Details screen** — distance, range rate, sunlight, sun elevation and the age of the orbit data.
 
+## Install
+
+### Recommended: Obtainium
+
+[Obtainium](https://obtainium.imranr.dev/) installs apps straight from their GitHub releases, keeps them
+up to date, and checks that every update is signed with the same key.
+
+1. Install Obtainium (see its website).
+2. In Obtainium, tap **Add App** and enter `https://github.com/KevinNortier/iss-tracker`.
+3. Tap **Install**. Obtainium will notify you about new versions from then on.
+
+### Manual
+
+Download the latest `iss-tracker-<version>-release.apk` from the
+[Releases page](https://github.com/KevinNortier/iss-tracker/releases) and open it on your phone.
+Android asks once to allow installs from your browser or file manager.
+
+### Verify the app
+
+Official builds have this package name and are signed with this certificate:
+
+| | |
+|---|---|
+| Package name | `io.github.kevinnortier.isstracker` |
+| Signing certificate SHA-256 | `6F:67:21:27:76:F5:2E:3A:81:02:95:81:E9:0A:2C:B5:12:BC:EC:B7:E4:0E:B8:C4:94:21:93:B1:8A:42:28:D8` |
+
+To check a downloaded APK on a computer with the Android SDK build tools:
+
+```sh
+apksigner verify --print-certs iss-tracker-<version>-release.apk
+```
+
+The `certificate SHA-256 digest` it prints must match the fingerprint above (the same value, without
+colons, in lower case). On the phone, apps like AppVerifier can check an installed app against the
+package name and fingerprint. If they don't match, don't install it.
+
 ## Privacy
 
 - Your location is only used on the phone to calculate the passes. It is never sent anywhere.
@@ -92,7 +128,21 @@ Open the project in Android Studio, or from the command line (JDK 17+):
 ./gradlew lintDebug              # Android lint
 ```
 
-The debug APK ends up in `app/build/outputs/apk/debug/`.
+The debug APK ends up in `app/build/outputs/apk/debug/` (`iss-tracker-<version>-debug.apk`). Debug builds
+use the package name `io.github.kevinnortier.isstracker.debug` and the name "ISS Tracker (debug)", so they
+install next to the release app.
+
+### Versions
+
+The version is set in one place, `appVersion` in `app/build.gradle.kts` (semantic versioning,
+`MAJOR.MINOR.PATCH`). The `versionCode` Android uses for updates is derived from it as
+`MAJOR × 10000 + MINOR × 100 + PATCH` (1.0.0 → 10000, 1.2.3 → 10203).
+
+### Release builds
+
+`./gradlew assembleRelease` signs the APK if a `keystore.properties` file exists in the project root
+(git-ignored) with `storeFile`, `storePassword`, `keyAlias` and `keyPassword`. Without it the release
+APK is built unsigned.
 
 ### Regenerating the test reference data
 
