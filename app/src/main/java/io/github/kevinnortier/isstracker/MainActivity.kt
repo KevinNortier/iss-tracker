@@ -20,6 +20,8 @@ import io.github.kevinnortier.isstracker.ui.aim.AimRoute
 import io.github.kevinnortier.isstracker.ui.live.LiveRoute
 import io.github.kevinnortier.isstracker.ui.passdetails.PassDetailsRoute
 import io.github.kevinnortier.isstracker.ui.passes.PassesRoute
+import io.github.kevinnortier.isstracker.ui.satellites.AddSatelliteRoute
+import io.github.kevinnortier.isstracker.ui.satellites.SatellitesRoute
 import io.github.kevinnortier.isstracker.ui.settings.SettingsRoute
 import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
 import io.github.kevinnortier.isstracker.ui.theme.isDark
@@ -54,6 +56,8 @@ private object Routes {
     const val LIVE = "live"
     const val SETTINGS = "settings"
     const val AIM = "aim"
+    const val SATELLITES = "satellites"
+    const val ADD_SATELLITE = "satellites/add"
     const val PASS_DETAILS = "pass/{rise}"
 
     fun passDetails(riseMillis: Long) = "pass/$riseMillis"
@@ -91,7 +95,19 @@ private fun AppNavigation() {
             AimRoute(onBack = back)
         }
         composable(Routes.SETTINGS) {
-            SettingsRoute(onBack = back)
+            SettingsRoute(
+                onBack = back,
+                onOpenSatellites = { navController.navigate(Routes.SATELLITES) { launchSingleTop = true } },
+            )
+        }
+        composable(Routes.SATELLITES) {
+            SatellitesRoute(
+                onBack = back,
+                onAdd = { navController.navigate(Routes.ADD_SATELLITE) { launchSingleTop = true } },
+            )
+        }
+        composable(Routes.ADD_SATELLITE) {
+            AddSatelliteRoute(onBack = back)
         }
     }
 }
