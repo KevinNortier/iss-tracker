@@ -9,6 +9,7 @@ import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.data.TleRepository
 import io.github.kevinnortier.isstracker.data.settings.SettingsRepository
 import io.github.kevinnortier.isstracker.data.settings.resolveObserver
+import io.github.kevinnortier.isstracker.orbit.Pass
 import io.github.kevinnortier.isstracker.orbit.PassPredictor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -39,6 +40,26 @@ class PassReminderScheduler(
     private companion object {
         const val ACTION_REMINDER = "io.github.kevinnortier.isstracker.action.PASS_REMINDER"
         val LOOK_AHEAD_LIMIT: Duration = Duration.ofDays(11)
+    }
+
+    /** True if [pass] has a reminder turned on. */
+    suspend fun hasReminder(pass: Pass): Boolean =
+        settings.selectedPasses.first().any { matchPass(it, listOf(pass)) != null }
+
+    /**
+     * Turns the reminder for [pass] on or off and re-arms the alarms. When turning it on after
+     * the reminder time has already passed, the reminder is shown right away.
+     */
+    suspend fun toggle(pass: Pass) {
+        val existing = settings.selectedPasses.first().firstOrNull { matchPass(it, listOf(pass)) != null }
+        if (existing != null) {
+            settings.setPassSelected(existing, false)
+            reschedule()
+        } else {
+            val key = PassKey.of(satellite.noradId, pass)
+            settings.setPassSelected(key, true)
+            reschedule(showLateNow = setOf(key))
+        }
     }
 
     /** False if the system only allows inexact alarms (reminders may then be a few minutes late). */

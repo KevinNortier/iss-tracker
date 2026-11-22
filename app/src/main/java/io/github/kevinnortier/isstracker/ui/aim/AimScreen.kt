@@ -38,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -161,6 +160,7 @@ private fun AimRing(state: AimUiState) {
     val primary = MaterialTheme.colorScheme.primary
     val outline = MaterialTheme.colorScheme.outline
     val onSurface = MaterialTheme.colorScheme.onSurface
+    val dotOutline = MaterialTheme.colorScheme.surface
     val locked = state.onTarget
     val description = when {
         aim == null -> "Waiting for the orientation sensor"
@@ -199,7 +199,7 @@ private fun AimRing(state: AimUiState) {
                 drawCircle(primary, 14.dp.toPx(), dot, style = Stroke(width = 4.dp.toPx()))
             } else {
                 drawCircle(primary, 12.dp.toPx(), dot)
-                drawCircle(Color.White, 12.dp.toPx(), dot, style = Stroke(width = 2.dp.toPx()))
+                drawCircle(dotOutline, 12.dp.toPx(), dot, style = Stroke(width = 2.dp.toPx()))
             }
         }
     }

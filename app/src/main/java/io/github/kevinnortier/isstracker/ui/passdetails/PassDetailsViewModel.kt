@@ -1,0 +1,143 @@
+package io.github.kevinnortier.isstracker.ui.passdetails
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
+import io.github.kevinnortier.isstracker.AppContainer
+import io.github.kevinnortier.isstracker.IssTrackerApp
+import io.github.kevinnortier.isstracker.data.settings.resolveObserver
+import io.github.kevinnortier.isstracker.notify.PassKey
+import io.github.kevinnortier.isstracker.notify.matchPass
+import io.github.kevinnortier.isstracker.orbit.LookAngles
+import io.github.kevinnortier.isstracker.orbit.Pass
+import io.github.kevinnortier.isstracker.orbit.PassPredictor
+import io.github.kevinnortier.isstracker.orbit.SatelliteTracker
+import io.github.kevinnortier.isstracker.ui.secondTicker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+
+/** One sample of the pass path for the sky plot. */
+data class TrackPoint(val azimuthDeg: Double, val elevationDeg: Double, val visible: Boolean)
+
+data class PassDetailsUiState(
+    val satelliteName: String,
+    val loading: Boolean = true,
+    /** Set when the pass can't be found (e.g. it's over, or no longer above the minimum elevation). */
+    val notFound: Boolean = false,
+    val pass: Pass? = null,
+    val track: List<TrackPoint> = emptyList(),
+    val reminderOn: Boolean = false,
+    /** Where the satellite is now, if the pass is in progress. */
+    val currentLook: LookAngles? = null,
+    val now: Instant = Instant.EPOCH,
+)
+
+/** Details of one pass, identified by its (approximate) rise time. */
+@OptIn(ExperimentalCoroutinesApi::class)
+class PassDetailsViewModel(
+    private val container: AppContainer,
+    riseMillis: Long,
+    private val clock: Clock = Clock.systemUTC(),
+) : ViewModel() {
+
+    private data class Computed(val pass: Pass?, val track: List<TrackPoint>, val predictor: PassPredictor?)
+
+    private val key = PassKey(container.satellite.noradId, riseMillis)
+
+    private val computed = combine(
+        container.tleRepository.latest(container.satellite.noradId).map { it?.tle }.distinctUntilChanged(),
+        container.settingsRepository.settings
+            .map { it.resolveObserver()?.location to it.minElevationDeg }
+            .distinctUntilChanged(),
+    ) { tle, observer -> tle to observer }
+        .mapLatest { (tle, observer) ->
+            val (location, minElevation) = observer
+            if (tle == null || location == null) return@mapLatest null
+            runCatching {
+                val predictor = PassPredictor(tle, location, minElevation)
+                val around = Instant.ofEpochMilli(key.riseMillis)
+                val pass = matchPass(key, predictor.passes(around.minus(WINDOW), around.plus(WINDOW)))
+                Computed(pass, pass?.let { track(SatelliteTracker(tle, location), it) }.orEmpty(), predictor)
+            }.getOrElse { Computed(null, emptyList(), null) }
+        }
+        .flowOn(Dispatchers.Default)
+        .onStart { emit(null) }
+
+    val uiState: StateFlow<PassDetailsUiState> = combine(
+        computed,
+        container.settingsRepository.selectedPasses,
+        secondTicker(clock),
+    ) { computed, selected, now ->
+        val base = PassDetailsUiState(satelliteName = container.satellite.displayName, now = now)
+        when {
+            computed == null -> base
+            computed.pass == null -> base.copy(loading = false, notFound = true)
+            else -> base.copy(
+                loading = false,
+                pass = computed.pass,
+                track = computed.track,
+                reminderOn = selected.any { matchPass(it, listOf(computed.pass)) != null },
+                currentLook = if (computed.pass.isInProgress(now)) {
+                    runCatching { computed.predictor?.lookAngles(now) }.getOrNull()
+                } else {
+                    null
+                },
+            )
+        }
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        PassDetailsUiState(satelliteName = container.satellite.displayName),
+    )
+
+    init {
+        // Make sure the cached TLE is loaded even if the app was restored straight into this screen.
+        viewModelScope.launch { container.tleRepository.getCached(container.satellite.noradId) }
+    }
+
+    fun toggleReminder() {
+        val pass = uiState.value.pass ?: return
+        viewModelScope.launch { container.reminderScheduler.toggle(pass) }
+    }
+
+    /** The path from rise to set, sampled every few seconds, with the visible-to-the-eye flag. */
+    private fun track(tracker: SatelliteTracker, pass: Pass): List<TrackPoint> {
+        val points = mutableListOf<TrackPoint>()
+        var t = pass.rise.time
+        while (!t.isAfter(pass.set.time)) {
+            val o = tracker.observe(t)
+            points += TrackPoint(o.look.azimuthDeg, o.look.elevationDeg, o.visible)
+            t = t.plus(TRACK_STEP)
+        }
+        val end = tracker.observe(pass.set.time)
+        points += TrackPoint(end.look.azimuthDeg, end.look.elevationDeg, end.visible)
+        return points
+    }
+
+    companion object {
+        private val WINDOW: Duration = Duration.ofHours(2)
+        private val TRACK_STEP: Duration = Duration.ofSeconds(5)
+
+        fun factory(riseMillis: Long): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+                val app = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as IssTrackerApp
+                return PassDetailsViewModel(app.container, riseMillis) as T
+            }
+        }
+    }
+}

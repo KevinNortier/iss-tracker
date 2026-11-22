@@ -47,6 +47,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val SCHEDULED_REMINDERS = stringSetPreferencesKey("scheduled_reminders")
 
         val POINTING_AXIS = stringPreferencesKey("pointing_axis")
+
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     val settings: Flow<AppSettings> = dataStore.data
@@ -90,6 +92,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setNotifyLeadMinutes(minutes: Int) {
         require(minutes in 0..180) { "Lead time must be between 0 and 180 minutes" }
         dataStore.edit { it[Keys.NOTIFY_LEAD] = minutes }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
     }
 
     suspend fun setPointingAxis(axis: PointingAxis) {
@@ -154,6 +160,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             ?.let { name -> PointingAxis.entries.firstOrNull { it.name == name } }
             ?: PointingAxis.BACK
 
+        val theme = this[Keys.THEME_MODE]
+            ?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
+            ?: ThemeMode.SYSTEM
+
         return AppSettings(
             locationMode = mode,
             savedLocation = saved,
@@ -162,6 +172,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             notifyTrigger = trigger,
             notifyLeadMinutes = lead,
             pointingAxis = axis,
+            themeMode = theme,
         )
     }
 

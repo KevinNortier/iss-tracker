@@ -10,6 +10,9 @@ enum class LocationMode { CURRENT, SAVED }
 /** Which moment of a pass a reminder counts down to. */
 enum class NotifyTrigger { RISE, APEX }
 
+/** App colours. NIGHT is red on black, to keep night vision when observing outdoors. */
+enum class ThemeMode { SYSTEM, LIGHT, DARK, NIGHT }
+
 /** A location the user entered by hand. */
 data class SavedLocation(val name: String, val location: GeodeticLocation)
 
@@ -36,6 +39,7 @@ data class AppSettings(
     val notifyLeadMinutes: Int = DEFAULT_NOTIFY_LEAD_MINUTES,
     /** Which side of the phone points at the satellite in the aiming screen. */
     val pointingAxis: PointingAxis = PointingAxis.BACK,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
 ) {
     companion object {
         const val DEFAULT_MIN_ELEVATION_DEG = 0.0

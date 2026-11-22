@@ -111,12 +111,11 @@ class PassRemindersTest {
     }
 
     @Test
-    fun `notification ids are stable, distinct per pass and never the test id`() {
+    fun `notification ids are stable and distinct per pass`() {
         val a = ReminderNotifications.notificationId(key(0.0))
         val b = ReminderNotifications.notificationId(key(92.0))
         assertEquals(a, ReminderNotifications.notificationId(key(0.0)))
         assertTrue(a != b)
-        assertTrue(a != 1 && b != 1)
     }
 
     @Test

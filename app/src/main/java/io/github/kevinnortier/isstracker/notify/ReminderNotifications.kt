@@ -102,7 +102,6 @@ data class ReminderInfo(
 object ReminderNotifications {
 
     const val CHANNEL_ID = "pass_reminders"
-    private const val TEST_NOTIFICATION_ID = 1
 
     fun createChannel(context: Context) {
         val channel = NotificationChannel(CHANNEL_ID, "Pass reminders", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -162,28 +161,12 @@ object ReminderNotifications {
         NotificationManagerCompat.from(context).notify(notificationId(info.key), notification)
     }
 
-    /** A sample notification so the user can check that reminders get through. */
-    fun showTest(context: Context) {
-        if (!canNotify(context)) return
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_satellite)
-            .setContentTitle("Test reminder")
-            .setContentText("Pass reminders will look like this.")
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(openAppIntent(context))
-            .setAutoCancel(true)
-            .build()
-        @Suppress("MissingPermission")
-        NotificationManagerCompat.from(context).notify(TEST_NOTIFICATION_ID, notification)
-    }
-
     fun cancel(context: Context, key: PassKey) {
         NotificationManagerCompat.from(context).cancel(notificationId(key))
     }
 
-    /** Stable id per pass, so a reminder can be updated or cancelled. Never equal to the test id. */
-    fun notificationId(key: PassKey): Int = (key.riseMillis / 1000).toInt() xor (key.noradId shl 8) or 2
+    /** Stable id per pass, so a reminder can be updated or cancelled. */
+    fun notificationId(key: PassKey): Int = (key.riseMillis / 1000).toInt() xor (key.noradId shl 8)
 
     private fun openAppIntent(context: Context): PendingIntent = PendingIntent.getActivity(
         context,

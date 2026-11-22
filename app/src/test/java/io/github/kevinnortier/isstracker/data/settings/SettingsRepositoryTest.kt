@@ -124,6 +124,14 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `theme defaults to system and can be changed`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(ThemeMode.SYSTEM, repo.settings.first().themeMode)
+        repo.setThemeMode(ThemeMode.NIGHT)
+        assertEquals(ThemeMode.NIGHT, repo.settings.first().themeMode)
+    }
+
+    @Test
     fun `scheduled reminders are remembered`() = runBlocking {
         val repo = newRepository()
         val keys = setOf(PassKey(25544, 5_000L))

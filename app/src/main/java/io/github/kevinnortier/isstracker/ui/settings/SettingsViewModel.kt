@@ -10,6 +10,7 @@ import io.github.kevinnortier.isstracker.data.settings.AppSettings
 import io.github.kevinnortier.isstracker.data.settings.LocationInput
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.data.settings.NotifyTrigger
+import io.github.kevinnortier.isstracker.data.settings.ThemeMode
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import io.github.kevinnortier.isstracker.data.settings.SavedLocation
 import io.github.kevinnortier.isstracker.data.settings.SettingsRepository
@@ -65,6 +66,10 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
 
     fun setNotifyTrigger(trigger: NotifyTrigger) {
         viewModelScope.launch { repository.setNotifyTrigger(trigger) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { repository.setThemeMode(mode) }
     }
 
     fun setPointingAxis(axis: PointingAxis) {

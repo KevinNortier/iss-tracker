@@ -64,6 +64,7 @@ fun PassesRoute(
     onOpenLive: () -> Unit,
     onOpenAim: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenPass: (riseMillis: Long) -> Unit,
     viewModel: PassesViewModel = viewModel(factory = PassesViewModel.Factory),
     locationViewModel: LocationViewModel = viewModel(factory = LocationViewModel.Factory),
 ) {
@@ -152,6 +153,7 @@ fun PassesRoute(
                                 highlighted = pass == state.current,
                                 reminderOn = state.hasReminder(pass),
                                 onToggleReminder = { onToggleReminder(pass) },
+                                onClick = { onOpenPass(pass.rise.time.toEpochMilli()) },
                             )
                         }
                     }
@@ -305,8 +307,15 @@ private fun VisibleIcon() {
 }
 
 @Composable
-private fun PassRow(pass: Pass, highlighted: Boolean, reminderOn: Boolean, onToggleReminder: () -> Unit) {
+private fun PassRow(
+    pass: Pass,
+    highlighted: Boolean,
+    reminderOn: Boolean,
+    onToggleReminder: () -> Unit,
+    onClick: () -> Unit,
+) {
     Card(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .semantics {

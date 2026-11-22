@@ -1,5 +1,10 @@
 package io.github.kevinnortier.isstracker.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -45,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kevinnortier.isstracker.data.settings.AppSettings
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.data.settings.NotifyTrigger
+import io.github.kevinnortier.isstracker.data.settings.ThemeMode
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
 import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
@@ -64,6 +70,7 @@ fun SettingsRoute(
         onNotifyTriggerChange = viewModel::setNotifyTrigger,
         onNotifyLeadChange = viewModel::setNotifyLeadMinutes,
         onPointingAxisChange = viewModel::setPointingAxis,
+        onThemeChange = viewModel::setThemeMode,
         onNameChange = { viewModel.updateForm(name = it) },
         onLatitudeChange = { viewModel.updateForm(latitude = it) },
         onLongitudeChange = { viewModel.updateForm(longitude = it) },
@@ -83,6 +90,7 @@ fun SettingsScreen(
     onNotifyTriggerChange: (NotifyTrigger) -> Unit,
     onNotifyLeadChange: (Int) -> Unit,
     onPointingAxisChange: (PointingAxis) -> Unit,
+    onThemeChange: (ThemeMode) -> Unit,
     onNameChange: (String) -> Unit,
     onLatitudeChange: (String) -> Unit,
     onLongitudeChange: (String) -> Unit,
@@ -127,15 +135,22 @@ fun SettingsScreen(
                 )
             }
 
-            SavedLocationCard(
-                state = state,
-                onNameChange = onNameChange,
-                onLatitudeChange = onLatitudeChange,
-                onLongitudeChange = onLongitudeChange,
-                onAltitudeChange = onAltitudeChange,
-                onFillFromLastFix = onFillFromLastFix,
-                onSave = onSave,
-            )
+            // The form is only relevant when using a saved location.
+            AnimatedVisibility(
+                visible = state.settings.locationMode == LocationMode.SAVED,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                SavedLocationCard(
+                    state = state,
+                    onNameChange = onNameChange,
+                    onLatitudeChange = onLatitudeChange,
+                    onLongitudeChange = onLongitudeChange,
+                    onAltitudeChange = onAltitudeChange,
+                    onFillFromLastFix = onFillFromLastFix,
+                    onSave = onSave,
+                )
+            }
 
             Text(
                 "Your location is only used on this phone to calculate where the ISS is. " +
@@ -192,6 +207,29 @@ fun SettingsScreen(
                     label = { Text("Top of phone") },
                 )
             }
+
+            HorizontalDivider()
+
+            Text("Appearance", style = MaterialTheme.typography.titleLarge)
+            Text("Theme", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Night is red on black, to keep your eyes adapted to the dark when observing.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    ThemeMode.SYSTEM to "System",
+                    ThemeMode.LIGHT to "Light",
+                    ThemeMode.DARK to "Dark",
+                    ThemeMode.NIGHT to "Night (red)",
+                ).forEach { (mode, label) ->
+                    FilterChip(
+                        selected = state.settings.themeMode == mode,
+                        onClick = { onThemeChange(mode) },
+                        label = { Text(label) },
+                    )
+                }
+            }
         }
     }
 }
@@ -234,20 +272,13 @@ private fun NotificationSettings(
             )
         }
     }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { notifications.runWithPermission { ReminderNotifications.showTest(context) } }) {
-            Text("Send test notification")
-        }
-        if (notifications.denied) {
-            OutlinedButton(onClick = notifications::openSystemSettings) { Text("Notification settings") }
-        }
-    }
-    if (notifications.denied) {
+    if (notifications.denied || !ReminderNotifications.canNotify(context)) {
         Text(
-            "Notifications are turned off for ISS Tracker.",
+            "Notifications are turned off for ISS Tracker, so reminders can't be shown.",
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall,
         )
+        OutlinedButton(onClick = notifications::openSystemSettings) { Text("Notification settings") }
     }
 }
 
@@ -349,6 +380,7 @@ private fun SettingsScreenPreview() {
             onNotifyTriggerChange = {},
             onNotifyLeadChange = {},
             onPointingAxisChange = {},
+            onThemeChange = {},
             onNameChange = {},
             onLatitudeChange = {},
             onLongitudeChange = {},
