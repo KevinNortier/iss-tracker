@@ -125,3 +125,15 @@ app/src/main/java/io/github/kevinnortier/isstracker/
   (AIAA 2006-6753).
 - Test references: [python-sgp4](https://pypi.org/project/sgp4/) (Brandon Rhodes) and
   [Skyfield](https://rhodesmill.org/skyfield/).
+
+## License
+
+Copyright (C) 2026 Kevin Nortier
+
+ISS Tracker is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version (SPDX: `GPL-3.0-or-later`).
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+[LICENSE](LICENSE) file for the full text.
