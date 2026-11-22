@@ -52,6 +52,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kevinnortier.isstracker.orbit.Pass
 import io.github.kevinnortier.isstracker.ui.DetailRow
 import io.github.kevinnortier.isstracker.ui.Format
+import io.github.kevinnortier.isstracker.ui.SatelliteDot
 import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
 import java.time.Duration
 import java.time.ZoneId
@@ -62,12 +63,13 @@ import kotlin.math.sin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PassDetailsRoute(
+    noradId: Int,
     riseMillis: Long,
     onBack: () -> Unit,
     onOpenAim: () -> Unit,
     viewModel: PassDetailsViewModel = viewModel(
-        key = "pass-$riseMillis",
-        factory = PassDetailsViewModel.factory(riseMillis),
+        key = "pass-$noradId-$riseMillis",
+        factory = PassDetailsViewModel.factory(noradId, riseMillis),
     ),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -110,7 +112,7 @@ fun PassDetailsRoute(
                     Facts(state, pass)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Find in sky aims at the current or next pass, so only offer it for that one.
-                        if (state.findInSkyTracksThis) {
+                        if (state.findInSkyTracksThis && state.findInSkyShowsSatellite) {
                             Button(onClick = onOpenAim) { Text("Find in sky") }
                         }
                         FilledTonalButton(
@@ -139,6 +141,11 @@ private fun Header(state: PassDetailsUiState, pass: Pass) {
     val zone = ZoneId.systemDefault()
     val today = state.now.atZone(zone).toLocalDate()
     Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SatelliteDot(state.noradId)
+            Spacer(Modifier.width(8.dp))
+            Text(state.satelliteName, style = MaterialTheme.typography.titleMedium)
+        }
         Text(
             Format.day(pass.rise.time.atZone(zone).toLocalDate(), today),
             style = MaterialTheme.typography.titleSmall,
@@ -149,7 +156,7 @@ private fun Header(state: PassDetailsUiState, pass: Pass) {
                 "${Format.time(pass.rise.time)} – ${Format.time(pass.set.time)}",
                 style = MaterialTheme.typography.headlineMedium,
             )
-            if (pass.visible) {
+            if (pass.visible && state.bright) {
                 Spacer(Modifier.width(8.dp))
                 Icon(
                     Icons.Filled.Star,
@@ -256,7 +263,7 @@ private fun SkyPlotCard(state: PassDetailsUiState, pass: Pass) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Legend(pathColor, visibleColor, labelStyle)
+            Legend(pathColor, visibleColor, labelStyle, if (state.bright) "Visible to the naked eye" else "Sunlit in a dark sky")
         }
     }
 }
@@ -272,10 +279,10 @@ private fun DrawScope.drawArrowHead(from: Offset, to: Offset, color: Color, size
 }
 
 @Composable
-private fun Legend(pathColor: Color, visibleColor: Color, style: TextStyle) {
+private fun Legend(pathColor: Color, visibleColor: Color, style: TextStyle, visibleText: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         LegendRow(pathColor, 3.dp, "Path (centre = straight up, edge = horizon, north up)", style)
-        LegendRow(visibleColor, 6.dp, "Visible to the naked eye", style)
+        LegendRow(visibleColor, 6.dp, visibleText, style)
     }
 }
 
@@ -311,9 +318,14 @@ private fun Facts(state: PassDetailsUiState, pass: Pass) {
             )
             DetailRow("Duration", Format.passDuration(pass.duration))
             if (pass.visible && pass.visibleFrom != null && pass.visibleUntil != null) {
-                DetailRow("Visible to the eye", "${Format.time(pass.visibleFrom)}–${Format.time(pass.visibleUntil)}")
-            } else {
+                DetailRow(
+                    if (state.bright) "Visible to the eye" else "Sunlit (likely too faint to see)",
+                    "${Format.time(pass.visibleFrom)}–${Format.time(pass.visibleUntil)}",
+                )
+            } else if (state.bright) {
                 DetailRow("Visible to the eye", "No (daylight or Earth's shadow)")
+            } else {
+                DetailRow("Sunlit", "No (daylight or Earth's shadow)")
             }
             state.currentLook?.let {
                 DetailRow("Now", "az ${Format.degrees1(it.azimuthDeg)}  el ${Format.degrees1(it.elevationDeg)}")

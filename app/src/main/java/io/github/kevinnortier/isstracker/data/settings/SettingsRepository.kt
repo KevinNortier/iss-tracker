@@ -56,6 +56,19 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
         /** Absent = never set (track the default, the ISS); empty text = the user removed everything. */
         val TRACKED_SATELLITES = stringPreferencesKey("tracked_satellites")
+
+        /** NORAD IDs shown in the pass list; empty = all tracked satellites. */
+        val PASS_FILTER = stringSetPreferencesKey("pass_filter")
+    }
+
+    /** NORAD IDs the pass list is filtered to; empty means "all". */
+    val passFilter: Flow<Set<Int>> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs[Keys.PASS_FILTER].orEmpty().mapNotNull { it.toIntOrNull() }.toSet() }
+        .distinctUntilChanged()
+
+    suspend fun setPassFilter(noradIds: Set<Int>) {
+        dataStore.edit { it[Keys.PASS_FILTER] = noradIds.map(Int::toString).toSet() }
     }
 
     val settings: Flow<AppSettings> = dataStore.data

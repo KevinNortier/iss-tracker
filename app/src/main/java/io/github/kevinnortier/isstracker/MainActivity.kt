@@ -58,9 +58,9 @@ private object Routes {
     const val AIM = "aim"
     const val SATELLITES = "satellites"
     const val ADD_SATELLITE = "satellites/add"
-    const val PASS_DETAILS = "pass/{rise}"
+    const val PASS_DETAILS = "pass/{norad}/{rise}"
 
-    fun passDetails(riseMillis: Long) = "pass/$riseMillis"
+    fun passDetails(noradId: Int, riseMillis: Long) = "pass/$noradId/$riseMillis"
 }
 
 @Composable
@@ -75,14 +75,19 @@ private fun AppNavigation() {
                 onOpenLive = { navController.navigate(Routes.LIVE) { launchSingleTop = true } },
                 onOpenAim = openAim,
                 onOpenSettings = openSettings,
-                onOpenPass = { riseMillis -> navController.navigate(Routes.passDetails(riseMillis)) },
+                onOpenSatellites = { navController.navigate(Routes.SATELLITES) { launchSingleTop = true } },
+                onOpenPass = { noradId, riseMillis -> navController.navigate(Routes.passDetails(noradId, riseMillis)) },
             )
         }
         composable(
             Routes.PASS_DETAILS,
-            arguments = listOf(navArgument("rise") { type = NavType.LongType }),
+            arguments = listOf(
+                navArgument("norad") { type = NavType.IntType },
+                navArgument("rise") { type = NavType.LongType },
+            ),
         ) { entry ->
             PassDetailsRoute(
+                noradId = entry.arguments?.getInt("norad") ?: 0,
                 riseMillis = entry.arguments?.getLong("rise") ?: 0L,
                 onBack = back,
                 onOpenAim = openAim,

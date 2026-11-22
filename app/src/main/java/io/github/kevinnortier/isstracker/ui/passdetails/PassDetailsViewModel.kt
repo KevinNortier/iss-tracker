@@ -34,7 +34,10 @@ import java.time.Instant
 data class TrackPoint(val azimuthDeg: Double, val elevationDeg: Double, val visible: Boolean)
 
 data class PassDetailsUiState(
+    val noradId: Int,
     val satelliteName: String,
+    /** Bright enough to see with the eye when sunlit (otherwise "visible" only means sunlit). */
+    val bright: Boolean = true,
     val loading: Boolean = true,
     /** Set when the pass can't be found (e.g. it's over, or no longer above the minimum elevation). */
     val notFound: Boolean = false,
@@ -48,13 +51,16 @@ data class PassDetailsUiState(
      * (every earlier pass has ended).
      */
     val findInSkyTracksThis: Boolean = false,
+    /** Find in sky can show this satellite (for now it only shows one). */
+    val findInSkyShowsSatellite: Boolean = false,
     val now: Instant = Instant.EPOCH,
 )
 
-/** Details of one pass, identified by its (approximate) rise time. */
+/** Details of one pass, identified by the satellite and its (approximate) rise time. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PassDetailsViewModel(
     private val container: AppContainer,
+    private val noradId: Int,
     riseMillis: Long,
     private val clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
@@ -67,10 +73,15 @@ class PassDetailsViewModel(
         val earlierPasses: List<Pass> = emptyList(),
     )
 
-    private val key = PassKey(container.satellite.noradId, riseMillis)
+    private val key = PassKey(noradId, riseMillis)
+
+    /** The tracked satellite (null if it's no longer tracked). */
+    private val satellite = container.settingsRepository.trackedSatellites
+        .map { list -> list.firstOrNull { it.noradId == noradId } }
+        .distinctUntilChanged()
 
     private val computed = combine(
-        container.tleRepository.latest(container.satellite.noradId).map { it?.tle }.distinctUntilChanged(),
+        container.tleRepository.latest(noradId).map { it?.tle }.distinctUntilChanged(),
         container.settingsRepository.settings
             .map { it.resolveObserver()?.location to it.minElevationDeg }
             .distinctUntilChanged(),
@@ -98,10 +109,17 @@ class PassDetailsViewModel(
 
     val uiState: StateFlow<PassDetailsUiState> = combine(
         computed,
+        satellite,
         container.settingsRepository.selectedPasses,
         secondTicker(clock),
-    ) { computed, selected, now ->
-        val base = PassDetailsUiState(satelliteName = container.satellite.displayName, now = now)
+    ) { computed, satellite, selected, now ->
+        val base = PassDetailsUiState(
+            noradId = noradId,
+            satelliteName = satellite?.displayName ?: "#$noradId",
+            bright = satellite?.bright ?: false,
+            findInSkyShowsSatellite = noradId == container.satellite.noradId,
+            now = now,
+        )
         when {
             computed == null -> base
             computed.pass == null -> base.copy(loading = false, notFound = true)
@@ -109,7 +127,7 @@ class PassDetailsViewModel(
                 loading = false,
                 pass = computed.pass,
                 track = computed.track,
-                reminderOn = selected.any { matchPass(it, listOf(computed.pass)) != null },
+                reminderOn = selected.any { it.noradId == noradId && matchPass(it, listOf(computed.pass)) != null },
                 findInSkyTracksThis = computed.pass.set.time.isAfter(now) &&
                     computed.earlierPasses.none { it.set.time.isAfter(now) },
                 currentLook = if (computed.pass.isInProgress(now)) {
@@ -122,17 +140,17 @@ class PassDetailsViewModel(
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        PassDetailsUiState(satelliteName = container.satellite.displayName),
+        PassDetailsUiState(noradId = noradId, satelliteName = ""),
     )
 
     init {
         // Make sure the cached TLE is loaded even if the app was restored straight into this screen.
-        viewModelScope.launch { container.tleRepository.getCached(container.satellite.noradId) }
+        viewModelScope.launch { container.tleRepository.getCached(noradId) }
     }
 
     fun toggleReminder() {
         val pass = uiState.value.pass ?: return
-        viewModelScope.launch { container.reminderScheduler.toggle(container.satellite.noradId, pass) }
+        viewModelScope.launch { container.reminderScheduler.toggle(noradId, pass) }
     }
 
     /** The path from rise to set, sampled every few seconds, with the visible-to-the-eye flag. */
@@ -153,11 +171,11 @@ class PassDetailsViewModel(
         private val WINDOW: Duration = Duration.ofHours(2)
         private val TRACK_STEP: Duration = Duration.ofSeconds(5)
 
-        fun factory(riseMillis: Long): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+        fun factory(noradId: Int, riseMillis: Long): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 val app = extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as IssTrackerApp
-                return PassDetailsViewModel(app.container, riseMillis) as T
+                return PassDetailsViewModel(app.container, noradId, riseMillis) as T
             }
         }
     }

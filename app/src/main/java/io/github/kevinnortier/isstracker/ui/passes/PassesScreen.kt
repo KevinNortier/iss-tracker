@@ -26,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,9 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -58,18 +60,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.kevinnortier.isstracker.BuildConfig
 import io.github.kevinnortier.isstracker.R
+import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.location.LocationPermission
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
 import io.github.kevinnortier.isstracker.orbit.Pass
 import io.github.kevinnortier.isstracker.ui.DetailRow
 import io.github.kevinnortier.isstracker.ui.Format
-import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
+import io.github.kevinnortier.isstracker.ui.SatelliteDot
 import io.github.kevinnortier.isstracker.ui.location.LocationAutoRefresh
 import io.github.kevinnortier.isstracker.ui.location.LocationCard
 import io.github.kevinnortier.isstracker.ui.location.LocationUiState
 import io.github.kevinnortier.isstracker.ui.location.LocationViewModel
 import io.github.kevinnortier.isstracker.ui.location.summary
+import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
 import java.time.Duration
 import java.time.ZoneId
 
@@ -80,7 +84,8 @@ fun PassesRoute(
     onOpenLive: () -> Unit,
     onOpenAim: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenPass: (riseMillis: Long) -> Unit,
+    onOpenSatellites: () -> Unit,
+    onOpenPass: (noradId: Int, riseMillis: Long) -> Unit,
     viewModel: PassesViewModel = viewModel(factory = PassesViewModel.Factory),
     locationViewModel: LocationViewModel = viewModel(factory = LocationViewModel.Factory),
 ) {
@@ -90,7 +95,7 @@ fun PassesRoute(
 
     val context = LocalContext.current
     val notifications = rememberNotificationPermissionRequester()
-    val onToggleReminder: (Pass) -> Unit = { pass ->
+    val onToggleReminder: (SatPass) -> Unit = { pass ->
         if (state.hasReminder(pass)) {
             viewModel.toggleReminder(pass)
         } else {
@@ -103,7 +108,7 @@ fun PassesRoute(
 
     val zone = ZoneId.systemDefault()
     val today = state.now.atZone(zone).toLocalDate()
-    val byDay = state.passes.groupBy { it.rise.time.atZone(zone).toLocalDate() }
+    val byDay = state.passes.groupBy { it.pass.rise.time.atZone(zone).toLocalDate() }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -111,7 +116,7 @@ fun PassesRoute(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${state.satelliteName} passes")
+                        Text(state.title)
                         if (BuildConfig.DEBUG) {
                             Spacer(Modifier.size(8.dp))
                             Icon(
@@ -147,6 +152,7 @@ fun PassesRoute(
             }
 
             when {
+                state.noSatellites -> item(key = "no-satellites") { NoSatellitesCard(onOpenSatellites) }
                 state.loading -> item(key = "loading") { LoadingRow("Calculating passes…") }
                 state.error != null -> item(key = "error") {
                     Text(state.error!!, color = MaterialTheme.colorScheme.error)
@@ -158,9 +164,22 @@ fun PassesRoute(
                             Spacer(Modifier.height(8.dp))
                         }
                     }
+                    if (state.tracked.size > 1) {
+                        item(key = "filter") { FilterChips(state, viewModel::toggleFilter) }
+                    }
                     item(key = "headline") {
                         HeadlineCard(state, onOpenLive, onOpenAim, onToggleReminder)
                         Spacer(Modifier.height(8.dp))
+                    }
+                    if (state.withoutData.isNotEmpty()) {
+                        item(key = "without-data") {
+                            Text(
+                                "No orbit data for ${state.withoutData.joinToString { it.displayName }}, so its passes " +
+                                    "aren't shown.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                     if (state.passes.isEmpty()) {
                         item(key = "empty") {
@@ -176,13 +195,14 @@ fun PassesRoute(
                                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                             )
                         }
-                        items(passes, key = { "pass-${it.rise.time.toEpochMilli()}" }) { pass ->
+                        items(passes, key = { "pass-${it.noradId}-${it.pass.rise.time.toEpochMilli()}" }) { sp ->
                             PassRow(
-                                pass = pass,
-                                highlighted = pass == state.current,
-                                reminderOn = state.hasReminder(pass),
-                                onToggleReminder = { onToggleReminder(pass) },
-                                onClick = { onOpenPass(pass.rise.time.toEpochMilli()) },
+                                sp = sp,
+                                showName = state.showSatelliteNames,
+                                highlighted = sp in state.current,
+                                reminderOn = state.hasReminder(sp),
+                                onToggleReminder = { onToggleReminder(sp) },
+                                onClick = { onOpenPass(sp.noradId, sp.pass.rise.time.toEpochMilli()) },
                             )
                         }
                     }
@@ -197,6 +217,34 @@ fun PassesRoute(
 
 private fun LocationUiState.permissionNeedsAttention(): Boolean =
     mode == LocationMode.CURRENT && permission == LocationPermission.NONE
+
+@Composable
+private fun NoSatellitesCard(onOpenSatellites: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("No satellites", style = MaterialTheme.typography.titleMedium)
+            Text("Add the satellites you want to follow, like the ISS, Tiangong or amateur radio satellites.")
+            Button(onClick = onOpenSatellites) { Text("Add satellites") }
+        }
+    }
+}
+
+/** "All" plus one chip per tracked satellite. */
+@Composable
+private fun FilterChips(state: PassesUiState, onToggle: (Int?) -> Unit) {
+    val all = state.shown.size == state.tracked.size
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = all, onClick = { onToggle(null) }, label = { Text("All") })
+        state.tracked.forEach { s ->
+            FilterChip(
+                selected = !all && s.noradId in state.shown,
+                onClick = { onToggle(s.noradId) },
+                label = { Text(s.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingIcon = { SatelliteDot(s.noradId, size = 8.dp) },
+            )
+        }
+    }
+}
 
 @Composable
 private fun NotificationsBlockedCard(onOpenSettings: () -> Unit) {
@@ -220,10 +268,11 @@ private fun HeadlineCard(
     state: PassesUiState,
     onOpenLive: () -> Unit,
     onOpenAim: () -> Unit,
-    onToggleReminder: (Pass) -> Unit,
+    onToggleReminder: (SatPass) -> Unit,
 ) {
-    val current = state.current
+    val current = state.current.firstOrNull()
     val next = state.next
+    val shownPass = current ?: next
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -242,8 +291,11 @@ private fun HeadlineCard(
             }
             Spacer(Modifier.height(12.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpenAim) { Text("Find in sky") }
-                FilledTonalButton(onClick = onOpenLive) { Text("Details") }
+                // Find in sky and Details show one satellite (for now the ISS); only offer them for that one.
+                if (shownPass != null && shownPass.noradId == state.screensNoradId) {
+                    Button(onClick = onOpenAim) { Text("Find in sky") }
+                    FilledTonalButton(onClick = onOpenLive) { Text("Details") }
+                }
                 if (current == null && next != null) {
                     val on = state.hasReminder(next)
                     FilledTonalButton(onClick = { onToggleReminder(next) }) {
@@ -262,8 +314,15 @@ private fun HeadlineCard(
 }
 
 @Composable
-private fun CurrentPass(state: PassesUiState, pass: Pass) {
-    TitleWithVisibility("Passing now", pass.visible)
+private fun CurrentPass(state: PassesUiState, sp: SatPass) {
+    val pass = sp.pass
+    CardTitle("Passing now", sp, state.showSatelliteNames)
+    if (state.current.size > 1) {
+        Text(
+            "+${state.current.size - 1} more passing now: " + state.current.drop(1).joinToString { it.satellite.displayName },
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
     Spacer(Modifier.height(8.dp))
     state.currentLook?.let { look ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -275,12 +334,13 @@ private fun CurrentPass(state: PassesUiState, pass: Pass) {
     DetailRow("Sets in", Format.countdown(Duration.between(state.now, pass.set.time)))
     DetailRow("Highest", "${Format.degrees0(pass.apex.elevationDeg)} at ${Format.time(pass.apex.time)}")
     DetailRow("Sets", "${Format.time(pass.set.time)} in the ${Format.compassPoint(pass.set.azimuthDeg)}")
-    VisibilityNote(pass)
+    VisibilityNote(sp)
 }
 
 @Composable
-private fun NextPass(state: PassesUiState, pass: Pass) {
-    TitleWithVisibility("Next pass", pass.visible)
+private fun NextPass(state: PassesUiState, sp: SatPass) {
+    val pass = sp.pass
+    CardTitle("Next pass", sp, state.showSatelliteNames)
     Spacer(Modifier.height(4.dp))
     Text(
         "in ${Format.countdown(Duration.between(state.now, pass.rise.time))}",
@@ -304,24 +364,44 @@ private fun NextPass(state: PassesUiState, pass: Pass) {
             "(${Format.degrees0(pass.set.azimuthDeg)})",
     )
     DetailRow("Duration", Format.passDuration(pass.duration))
-    VisibilityNote(pass)
+    VisibilityNote(sp)
 }
 
 @Composable
-private fun VisibilityNote(pass: Pass) {
-    if (pass.visible && pass.visibleFrom != null && pass.visibleUntil != null) {
-        DetailRow("Visible to the eye", "${Format.time(pass.visibleFrom)}–${Format.time(pass.visibleUntil)}")
+private fun VisibilityNote(sp: SatPass) {
+    val pass = sp.pass
+    if (pass.visibleFrom == null || pass.visibleUntil == null) return
+    val window = "${Format.time(pass.visibleFrom)}–${Format.time(pass.visibleUntil)}"
+    when {
+        sp.visibleToEye -> DetailRow("Visible to the eye", window)
+        sp.sunlitOnly -> DetailRow("Sunlit (likely too faint to see)", window)
     }
 }
 
+/** "Next pass ★" plus, with several satellites, the satellite's dot and name. */
 @Composable
-private fun TitleWithVisibility(title: String, visible: Boolean) {
+private fun CardTitle(title: String, sp: SatPass, showName: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleMedium)
-        if (visible) {
+        if (sp.visibleToEye) {
             Spacer(Modifier.size(8.dp))
             VisibleIcon()
         }
+    }
+    if (showName) SatelliteLabel(sp.satellite, MaterialTheme.typography.titleSmall.fontSize.value)
+}
+
+@Composable
+private fun SatelliteLabel(satellite: Satellite, fontSizeSp: Float = 12f) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+        SatelliteDot(satellite.noradId, size = 8.dp)
+        Spacer(Modifier.size(6.dp))
+        Text(
+            satellite.displayName,
+            style = if (fontSizeSp >= 14f) MaterialTheme.typography.titleSmall else MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -337,19 +417,23 @@ private fun VisibleIcon() {
 
 @Composable
 private fun PassRow(
-    pass: Pass,
+    sp: SatPass,
+    showName: Boolean,
     highlighted: Boolean,
     reminderOn: Boolean,
     onToggleReminder: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val pass = sp.pass
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
-                contentDescription = "Pass from ${Format.time(pass.rise.time)} to ${Format.time(pass.set.time)}, " +
-                    "highest ${Format.degrees0(pass.apex.elevationDeg)}" + (if (pass.visible) ", visible" else "") +
+                contentDescription = (if (showName) "${sp.satellite.displayName}: " else "") +
+                    "Pass from ${Format.time(pass.rise.time)} to ${Format.time(pass.set.time)}, " +
+                    "highest ${Format.degrees0(pass.apex.elevationDeg)}" +
+                    (if (sp.visibleToEye) ", visible" else "") +
                     if (reminderOn) ", reminder on" else ""
             },
         colors = CardDefaults.cardColors(
@@ -361,41 +445,39 @@ private fun PassRow(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        // The bell button (48 dp) is shifted up so its centre lines up with the elevation number,
-        // like the star; "max" stays under the number.
-        val numberLineHeight = MaterialTheme.typography.titleLarge.lineHeight
-        val bellOffset = with(LocalDensity.current) { numberLineHeight.toDp() / 2 } - 24.dp
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column(Modifier.weight(1f)) {
-                PassTimes(pass)
-                PassDirections(pass)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                // The star sits on the same line as the elevation, centred on the number.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (pass.visible) {
-                        VisibleIcon()
-                        Spacer(Modifier.size(8.dp))
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            if (showName) SatelliteLabel(sp.satellite)
+            // The bell button (48 dp) is shifted up so its centre lines up with the elevation number,
+            // like the star; "max" stays under the number.
+            val numberLineHeight = MaterialTheme.typography.titleLarge.lineHeight
+            val bellOffset = with(LocalDensity.current) { numberLineHeight.toDp() / 2 } - 24.dp
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    PassTimes(pass)
+                    PassDirections(sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    // The star sits on the same line as the elevation, centred on the number.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (sp.visibleToEye) {
+                            VisibleIcon()
+                            Spacer(Modifier.size(8.dp))
+                        }
+                        Text(
+                            Format.degrees0(pass.apex.elevationDeg),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
-                    Text(
-                        Format.degrees0(pass.apex.elevationDeg),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
+                    Text("max", style = MaterialTheme.typography.bodySmall)
+                }
+                IconButton(onClick = onToggleReminder, modifier = Modifier.offset(y = bellOffset)) {
+                    Icon(
+                        if (reminderOn) Icons.Filled.Notifications else Icons.Outlined.Notifications,
+                        contentDescription = if (reminderOn) "Turn off reminder" else "Remind me about this pass",
+                        tint = if (reminderOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text("max", style = MaterialTheme.typography.bodySmall)
-            }
-            IconButton(onClick = onToggleReminder, modifier = Modifier.offset(y = bellOffset)) {
-                Icon(
-                    if (reminderOn) Icons.Filled.Notifications else Icons.Outlined.Notifications,
-                    contentDescription = if (reminderOn) "Turn off reminder" else "Remind me about this pass",
-                    tint = if (reminderOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
     }
@@ -416,14 +498,19 @@ private fun PassTimes(pass: Pass) {
     }
 }
 
-/** "WSW → ESE · 10 min 21 s": where it rises and sets, and how long it's up. */
+/** "WSW → ESE · 10 min 21 s" (plus "· sunlit" for faint satellites in a dark sky). */
 @Composable
-private fun PassDirections(pass: Pass) {
+private fun PassDirections(sp: SatPass) {
+    val pass = sp.pass
     Row(verticalAlignment = Alignment.CenterVertically) {
         val style = MaterialTheme.typography.bodySmall
         Text(Format.compassPoint(pass.rise.azimuthDeg), style = style)
         TiltedArrow(rotation = 0f, size = 12.dp, gap = 4.dp)
-        Text("${Format.compassPoint(pass.set.azimuthDeg)} · ${Format.passDuration(pass.duration)}", style = style)
+        Text(
+            "${Format.compassPoint(pass.set.azimuthDeg)} · ${Format.passDuration(pass.duration)}" +
+                if (sp.sunlitOnly) " · sunlit" else "",
+            style = style,
+        )
     }
 }
 
@@ -456,7 +543,9 @@ private const val ARROW_RAISE = 0.12f
 @Composable
 private fun Footer(state: PassesUiState, locationSummary: String) {
     Column(Modifier.padding(top = 16.dp)) {
-        val tleAge = state.tleEpoch?.let { Format.duration(Duration.between(it, state.now)) + " old" } ?: "–"
+        val tleAge = state.oldestTleEpoch?.let {
+            (if (state.shown.size > 1) "up to " else "") + Format.duration(Duration.between(it, state.now)) + " old"
+        } ?: "–"
         Text(
             withCenteredArrows(
                 "Passes above ${Format.degrees0(state.minElevationDeg)}, 10 days ahead. " +
@@ -469,6 +558,12 @@ private fun Footer(state: PassesUiState, locationSummary: String) {
             VisibleIcon()
             Spacer(Modifier.size(4.dp))
             Text("= visible to the naked eye", style = MaterialTheme.typography.bodySmall)
+        }
+        if (state.passes.any { it.sunlitOnly }) {
+            Text(
+                "\"sunlit\" = in sunlight while your sky is dark, but most satellites are too faint to see.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }

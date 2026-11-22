@@ -196,4 +196,14 @@ class SettingsRepositoryTest {
         val settings = runBlocking { newRepository().settings.first() }
         assertEquals(LocationMode.SAVED, settings.locationMode)
     }
+
+    @Test
+    fun `pass filter defaults to all and is stored`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(emptySet<Int>(), repo.passFilter.first())
+        repo.setPassFilter(setOf(25544, 48274))
+        assertEquals(setOf(25544, 48274), repo.passFilter.first())
+        repo.setPassFilter(emptySet())
+        assertEquals(emptySet<Int>(), repo.passFilter.first())
+    }
 }
