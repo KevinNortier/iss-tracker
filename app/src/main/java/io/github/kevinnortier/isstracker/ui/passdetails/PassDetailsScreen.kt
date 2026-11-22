@@ -109,7 +109,10 @@ fun PassDetailsRoute(
                     SkyPlotCard(state, pass)
                     Facts(state, pass)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onOpenAim) { Text("Find in sky") }
+                        // Find in sky aims at the current or next pass, so only offer it for that one.
+                        if (state.findInSkyTracksThis) {
+                            Button(onClick = onOpenAim) { Text("Find in sky") }
+                        }
                         FilledTonalButton(
                             onClick = {
                                 if (state.reminderOn) viewModel.toggleReminder()

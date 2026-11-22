@@ -43,6 +43,11 @@ data class PassDetailsUiState(
     val reminderOn: Boolean = false,
     /** Where the satellite is now, if the pass is in progress. */
     val currentLook: LookAngles? = null,
+    /**
+     * True if Find in sky would aim at this pass: it's in progress, or it's the next one
+     * (every earlier pass has ended).
+     */
+    val findInSkyTracksThis: Boolean = false,
     val now: Instant = Instant.EPOCH,
 )
 
@@ -54,7 +59,13 @@ class PassDetailsViewModel(
     private val clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
 
-    private data class Computed(val pass: Pass?, val track: List<TrackPoint>, val predictor: PassPredictor?)
+    private data class Computed(
+        val pass: Pass?,
+        val track: List<TrackPoint>,
+        val predictor: PassPredictor?,
+        /** Passes between "now" (when calculated) and this one; this pass is next once they have all ended. */
+        val earlierPasses: List<Pass> = emptyList(),
+    )
 
     private val key = PassKey(container.satellite.noradId, riseMillis)
 
@@ -71,7 +82,15 @@ class PassDetailsViewModel(
                 val predictor = PassPredictor(tle, location, minElevation)
                 val around = Instant.ofEpochMilli(key.riseMillis)
                 val pass = matchPass(key, predictor.passes(around.minus(WINDOW), around.plus(WINDOW)))
-                Computed(pass, pass?.let { track(SatelliteTracker(tle, location), it) }.orEmpty(), predictor)
+                val earlier = pass?.let { p ->
+                    val now = clock.instant()
+                    if (p.rise.time.isAfter(now)) {
+                        predictor.passes(now, p.rise.time).filter { it.rise.time.isBefore(p.rise.time.minusSeconds(60)) }
+                    } else {
+                        emptyList()
+                    }
+                }.orEmpty()
+                Computed(pass, pass?.let { track(SatelliteTracker(tle, location), it) }.orEmpty(), predictor, earlier)
             }.getOrElse { Computed(null, emptyList(), null) }
         }
         .flowOn(Dispatchers.Default)
@@ -91,6 +110,8 @@ class PassDetailsViewModel(
                 pass = computed.pass,
                 track = computed.track,
                 reminderOn = selected.any { matchPass(it, listOf(computed.pass)) != null },
+                findInSkyTracksThis = computed.pass.set.time.isAfter(now) &&
+                    computed.earlierPasses.none { it.set.time.isAfter(now) },
                 currentLook = if (computed.pass.isInProgress(now)) {
                     runCatching { computed.predictor?.lookAngles(now) }.getOrNull()
                 } else {

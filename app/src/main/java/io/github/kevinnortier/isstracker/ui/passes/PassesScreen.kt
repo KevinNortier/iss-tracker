@@ -38,7 +38,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
@@ -54,6 +56,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.kevinnortier.isstracker.BuildConfig
+import io.github.kevinnortier.isstracker.R
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.location.LocationPermission
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
@@ -105,7 +109,20 @@ fun PassesRoute(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("${state.satelliteName} passes") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${state.satelliteName} passes")
+                        if (BuildConfig.DEBUG) {
+                            Spacer(Modifier.size(8.dp))
+                            Icon(
+                                painterResource(R.drawable.ic_debug_bug),
+                                contentDescription = "Debug build",
+                                // Same red as the launcher icon's debug badge; clear on dark and light themes.
+                                tint = Color(0xFFE53935),
+                            )
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
