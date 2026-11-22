@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -44,6 +45,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val NOTIFY_LEAD = intPreferencesKey("notify_lead_min")
         val NOTIFY_PASSES = stringSetPreferencesKey("notify_passes")
         val SCHEDULED_REMINDERS = stringSetPreferencesKey("scheduled_reminders")
+
+        val POINTING_AXIS = stringPreferencesKey("pointing_axis")
     }
 
     val settings: Flow<AppSettings> = dataStore.data
@@ -87,6 +90,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setNotifyLeadMinutes(minutes: Int) {
         require(minutes in 0..180) { "Lead time must be between 0 and 180 minutes" }
         dataStore.edit { it[Keys.NOTIFY_LEAD] = minutes }
+    }
+
+    suspend fun setPointingAxis(axis: PointingAxis) {
+        dataStore.edit { it[Keys.POINTING_AXIS] = axis.name }
     }
 
     /** Passes the user wants a reminder for. */
@@ -143,6 +150,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             ?: NotifyTrigger.RISE
         val lead = this[Keys.NOTIFY_LEAD]?.takeIf { it in 0..180 } ?: AppSettings.DEFAULT_NOTIFY_LEAD_MINUTES
 
+        val axis = this[Keys.POINTING_AXIS]
+            ?.let { name -> PointingAxis.entries.firstOrNull { it.name == name } }
+            ?: PointingAxis.BACK
+
         return AppSettings(
             locationMode = mode,
             savedLocation = saved,
@@ -150,6 +161,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             minElevationDeg = minElevation,
             notifyTrigger = trigger,
             notifyLeadMinutes = lead,
+            pointingAxis = axis,
         )
     }
 

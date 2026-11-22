@@ -46,6 +46,7 @@ import io.github.kevinnortier.isstracker.data.settings.AppSettings
 import io.github.kevinnortier.isstracker.data.settings.LocationMode
 import io.github.kevinnortier.isstracker.data.settings.NotifyTrigger
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
+import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import io.github.kevinnortier.isstracker.ui.rememberNotificationPermissionRequester
 import io.github.kevinnortier.isstracker.ui.theme.ISSTrackerTheme
 
@@ -62,6 +63,7 @@ fun SettingsRoute(
         onMinElevationChange = viewModel::setMinElevation,
         onNotifyTriggerChange = viewModel::setNotifyTrigger,
         onNotifyLeadChange = viewModel::setNotifyLeadMinutes,
+        onPointingAxisChange = viewModel::setPointingAxis,
         onNameChange = { viewModel.updateForm(name = it) },
         onLatitudeChange = { viewModel.updateForm(latitude = it) },
         onLongitudeChange = { viewModel.updateForm(longitude = it) },
@@ -80,6 +82,7 @@ fun SettingsScreen(
     onMinElevationChange: (Double) -> Unit,
     onNotifyTriggerChange: (NotifyTrigger) -> Unit,
     onNotifyLeadChange: (Int) -> Unit,
+    onPointingAxisChange: (PointingAxis) -> Unit,
     onNameChange: (String) -> Unit,
     onLatitudeChange: (String) -> Unit,
     onLongitudeChange: (String) -> Unit,
@@ -167,6 +170,28 @@ fun SettingsScreen(
                 onTriggerChange = onNotifyTriggerChange,
                 onLeadChange = onNotifyLeadChange,
             )
+
+            HorizontalDivider()
+
+            Text("Find in sky", style = MaterialTheme.typography.titleLarge)
+            Text("Point at the ISS with", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Back: hold the phone like a camera. Top: e.g. with the phone strapped along an antenna, " +
+                    "binoculars or a camera.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.settings.pointingAxis == PointingAxis.BACK,
+                    onClick = { onPointingAxisChange(PointingAxis.BACK) },
+                    label = { Text("Back of phone") },
+                )
+                FilterChip(
+                    selected = state.settings.pointingAxis == PointingAxis.TOP,
+                    onClick = { onPointingAxisChange(PointingAxis.TOP) },
+                    label = { Text("Top of phone") },
+                )
+            }
         }
     }
 }
@@ -323,6 +348,7 @@ private fun SettingsScreenPreview() {
             onMinElevationChange = {},
             onNotifyTriggerChange = {},
             onNotifyLeadChange = {},
+            onPointingAxisChange = {},
             onNameChange = {},
             onLatitudeChange = {},
             onLongitudeChange = {},

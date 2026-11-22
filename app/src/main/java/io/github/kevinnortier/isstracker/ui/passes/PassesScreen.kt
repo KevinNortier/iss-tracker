@@ -23,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +62,7 @@ import java.time.ZoneId
 @Composable
 fun PassesRoute(
     onOpenLive: () -> Unit,
+    onOpenAim: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: PassesViewModel = viewModel(factory = PassesViewModel.Factory),
     locationViewModel: LocationViewModel = viewModel(factory = LocationViewModel.Factory),
@@ -127,7 +129,7 @@ fun PassesRoute(
                         }
                     }
                     item(key = "headline") {
-                        HeadlineCard(state, onOpenLive, onToggleReminder)
+                        HeadlineCard(state, onOpenLive, onOpenAim, onToggleReminder)
                         Spacer(Modifier.height(8.dp))
                     }
                     if (state.passes.isEmpty()) {
@@ -183,7 +185,12 @@ private fun NotificationsBlockedCard(onOpenSettings: () -> Unit) {
 }
 
 @Composable
-private fun HeadlineCard(state: PassesUiState, onOpenLive: () -> Unit, onToggleReminder: (Pass) -> Unit) {
+private fun HeadlineCard(
+    state: PassesUiState,
+    onOpenLive: () -> Unit,
+    onOpenAim: () -> Unit,
+    onToggleReminder: (Pass) -> Unit,
+) {
     val current = state.current
     val next = state.next
     Card(
@@ -204,10 +211,11 @@ private fun HeadlineCard(state: PassesUiState, onOpenLive: () -> Unit, onToggleR
             }
             Spacer(Modifier.height(12.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpenLive) { Text("Live position") }
+                Button(onClick = onOpenAim) { Text("Find in sky") }
+                FilledTonalButton(onClick = onOpenLive) { Text("Details") }
                 if (current == null && next != null) {
                     val on = state.hasReminder(next)
-                    OutlinedButton(onClick = { onToggleReminder(next) }) {
+                    FilledTonalButton(onClick = { onToggleReminder(next) }) {
                         Icon(
                             if (on) Icons.Filled.Notifications else Icons.Outlined.Notifications,
                             contentDescription = null,

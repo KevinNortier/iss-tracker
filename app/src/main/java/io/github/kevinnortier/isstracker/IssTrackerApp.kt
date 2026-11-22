@@ -12,6 +12,7 @@ import io.github.kevinnortier.isstracker.location.DeviceLocationProvider
 import io.github.kevinnortier.isstracker.location.LocationRepository
 import io.github.kevinnortier.isstracker.notify.PassReminderScheduler
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
+import io.github.kevinnortier.isstracker.sensors.OrientationSensor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,8 @@ class AppContainer(app: Application) {
     val locationRepository = LocationRepository(settingsRepository, DeviceLocationProvider(app))
 
     val reminderScheduler = PassReminderScheduler(app, satellite, settingsRepository, tleRepository)
+
+    val orientationSensor = OrientationSensor(app)
 }
 
 class IssTrackerApp : Application() {

@@ -1,6 +1,7 @@
 package io.github.kevinnortier.isstracker.data.settings
 
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import java.time.Instant
 
 /** Where the observer position comes from. */
@@ -33,6 +34,8 @@ data class AppSettings(
     val notifyTrigger: NotifyTrigger = NotifyTrigger.RISE,
     /** How many minutes before the trigger moment the reminder is shown. */
     val notifyLeadMinutes: Int = DEFAULT_NOTIFY_LEAD_MINUTES,
+    /** Which side of the phone points at the satellite in the aiming screen. */
+    val pointingAxis: PointingAxis = PointingAxis.BACK,
 ) {
     companion object {
         const val DEFAULT_MIN_ELEVATION_DEG = 0.0

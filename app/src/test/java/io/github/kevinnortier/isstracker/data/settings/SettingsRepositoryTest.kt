@@ -3,6 +3,7 @@ package io.github.kevinnortier.isstracker.data.settings
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
+import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -112,6 +113,14 @@ class SettingsRepositoryTest {
         assertEquals(setOf(b), repo.selectedPasses.first())
         repo.setSelectedPasses(setOf(a))
         assertEquals(setOf(a), repo.selectedPasses.first())
+    }
+
+    @Test
+    fun `pointing axis defaults to the back and can be changed`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(PointingAxis.BACK, repo.settings.first().pointingAxis)
+        repo.setPointingAxis(PointingAxis.TOP)
+        assertEquals(PointingAxis.TOP, repo.settings.first().pointingAxis)
     }
 
     @Test

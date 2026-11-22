@@ -44,6 +44,7 @@ import java.time.Duration
 @Composable
 fun LiveRoute(
     onBack: () -> Unit,
+    onOpenAim: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: LiveViewModel = viewModel(factory = LiveViewModel.Factory),
     locationViewModel: LocationViewModel = viewModel(factory = LocationViewModel.Factory),
@@ -56,7 +57,7 @@ fun LiveRoute(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Live position") },
+                title = { Text("${state.satelliteName} details") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -73,7 +74,7 @@ fun LiveRoute(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            PositionCard(state)
+            PositionCard(state, onOpenAim)
             LocationCard(location, state.now, locationViewModel, onOpenSettings)
             OrbitDataCard(state, viewModel::refreshTle)
         }
@@ -81,7 +82,7 @@ fun LiveRoute(
 }
 
 @Composable
-private fun PositionCard(state: LiveUiState) {
+private fun PositionCard(state: LiveUiState, onOpenAim: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("${state.satelliteName} now", style = MaterialTheme.typography.titleMedium)
@@ -92,7 +93,11 @@ private fun PositionCard(state: LiveUiState) {
                     "Could not calculate position: ${state.calculationError}",
                     color = MaterialTheme.colorScheme.error,
                 )
-                obs != null -> ObservationDetails(obs)
+                obs != null -> {
+                    ObservationDetails(obs)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onOpenAim) { Text("Find in sky") }
+                }
                 !state.hasObserver -> Text("Choose a location below to see where the ISS is.")
                 state.tleStatus is TleStatus.Failed -> Text("No orbit data yet.")
                 else -> Row(verticalAlignment = Alignment.CenterVertically) {
