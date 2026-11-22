@@ -14,28 +14,28 @@ import io.github.kevinnortier.isstracker.notify.PassReminderScheduler
 import io.github.kevinnortier.isstracker.notify.ReminderNotifications
 import io.github.kevinnortier.isstracker.sensors.OrientationSensor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
-
-/** A satellite the app can track. */
-data class Satellite(val noradId: Int, val displayName: String) {
-    companion object {
-        val ISS = Satellite(25544, "ISS")
-    }
-}
 
 private val Context.settingsDataStore by preferencesDataStore(name = "settings")
 
 /** Simple manual dependency container, created once per process. */
 class AppContainer(app: Application) {
 
+    /**
+     * The satellite the screens show. Still the ISS: the screens become per-satellite in later steps
+     * (S3/S4). Background work (orbit data refresh, reminders) already covers all tracked satellites.
+     */
     val satellite: Satellite = Satellite.ISS
 
     val tleRepository = TleRepository(
@@ -47,9 +47,15 @@ class AppContainer(app: Application) {
 
     val locationRepository = LocationRepository(settingsRepository, DeviceLocationProvider(app))
 
-    val reminderScheduler = PassReminderScheduler(app, satellite, settingsRepository, tleRepository)
+    val reminderScheduler = PassReminderScheduler(app, settingsRepository, tleRepository)
 
     val orientationSensor = OrientationSensor(app)
+
+    /** Stops tracking a satellite: forgets its reminders and its cached orbit data. */
+    suspend fun removeSatellite(noradId: Int) {
+        settingsRepository.removeTrackedSatellite(noradId)
+        tleRepository.delete(noradId)
+    }
 }
 
 class IssTrackerApp : Application() {
@@ -69,19 +75,29 @@ class IssTrackerApp : Application() {
     }
 
     /**
-     * Re-arms the pass reminders whenever something that affects them changes:
-     * the selection, the location, the minimum elevation, the reminder settings or the orbit data.
+     * Re-arms the pass reminders whenever something that affects them changes: the selection, the
+     * tracked satellites, the location, the minimum elevation, the reminder settings or any orbit data.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun keepRemindersUpToDate() {
         val c = container
+        // The TLEs of all tracked satellites (loading cached ones so latest() has them).
+        val tles = c.settingsRepository.trackedSatellites.flatMapLatest { satellites ->
+            satellites.forEach { c.tleRepository.getCached(it.noradId) }
+            if (satellites.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(satellites.map { s -> c.tleRepository.latest(s.noradId).map { it?.tle } }) { it.toList() }
+            }
+        }.distinctUntilChanged()
+
         appScope.launch {
-            c.tleRepository.getCached(c.satellite.noradId) // make the cached TLE available to latest()
             combine(
                 c.settingsRepository.settings
                     .map { listOf(it.resolveObserver()?.location, it.minElevationDeg, it.notifyTrigger, it.notifyLeadMinutes) }
                     .distinctUntilChanged(),
                 c.settingsRepository.selectedPasses,
-                c.tleRepository.latest(c.satellite.noradId).map { it?.tle }.distinctUntilChanged(),
+                tles,
             ) { _, _, _ -> Unit }
                 .collectLatest {
                     delay(500) // let quick successive changes settle

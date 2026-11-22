@@ -132,7 +132,7 @@ class PassDetailsViewModel(
 
     fun toggleReminder() {
         val pass = uiState.value.pass ?: return
-        viewModelScope.launch { container.reminderScheduler.toggle(pass) }
+        viewModelScope.launch { container.reminderScheduler.toggle(container.satellite.noradId, pass) }
     }
 
     /** The path from rise to set, sampled every few seconds, with the visible-to-the-eye flag. */

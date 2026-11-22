@@ -111,6 +111,12 @@ class TleRepository(
     suspend fun getCached(noradId: Int): CachedTle? =
         mutex.withLock { readCache(noradId) }?.also { publish(noradId, it) }
 
+    /** Forgets the cached TLE of a satellite that is no longer tracked. */
+    suspend fun delete(noradId: Int) = mutex.withLock {
+        withContext(Dispatchers.IO) { cacheFile(noradId).delete() }
+        latest.update { it - noradId }
+    }
+
     private suspend fun downloadAndParse(noradId: Int): Tle {
         val text = downloader.download(noradId)
         val tle = try {

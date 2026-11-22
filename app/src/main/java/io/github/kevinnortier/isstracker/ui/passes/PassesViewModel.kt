@@ -179,7 +179,7 @@ class PassesViewModel(
 
     /** Turns the reminder for [pass] on or off. */
     fun toggleReminder(pass: Pass) {
-        viewModelScope.launch { container.reminderScheduler.toggle(pass) }
+        viewModelScope.launch { container.reminderScheduler.toggle(container.satellite.noradId, pass) }
     }
 
     init {

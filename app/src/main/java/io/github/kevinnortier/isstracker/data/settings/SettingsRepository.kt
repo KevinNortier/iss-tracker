@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import io.github.kevinnortier.isstracker.Satellite
+import io.github.kevinnortier.isstracker.TrackedSatellitesCodec
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import io.github.kevinnortier.isstracker.sensors.HeadingSource
@@ -51,12 +53,62 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val HEADING_SOURCE = stringPreferencesKey("heading_source")
 
         val THEME_MODE = stringPreferencesKey("theme_mode")
+
+        /** Absent = never set (track the default, the ISS); empty text = the user removed everything. */
+        val TRACKED_SATELLITES = stringPreferencesKey("tracked_satellites")
     }
 
     val settings: Flow<AppSettings> = dataStore.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
         .map { it.toSettings() }
         .distinctUntilChanged()
+
+    // ---- Tracked satellites ----
+
+    /** The satellites the user tracks, in the user's order. */
+    val trackedSatellites: Flow<List<Satellite>> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs.trackedSatellites() }
+        .distinctUntilChanged()
+
+    suspend fun setTrackedSatellites(satellites: List<Satellite>) {
+        dataStore.edit {
+            it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(satellites.distinctBy { s -> s.noradId })
+        }
+    }
+
+    /**
+     * Adds [satellite] to the end of the list (or updates its name/brightness if already tracked).
+     * Returns false if the list is full ([Satellite.MAX_TRACKED]).
+     */
+    suspend fun addTrackedSatellite(satellite: Satellite): Boolean {
+        var added = true
+        dataStore.edit {
+            val current = it.trackedSatellites()
+            val index = current.indexOfFirst { s -> s.noradId == satellite.noradId }
+            val updated = when {
+                index >= 0 -> current.toMutableList().also { list -> list[index] = satellite }
+                current.size >= Satellite.MAX_TRACKED -> { added = false; current }
+                else -> current + satellite
+            }
+            it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(updated)
+        }
+        return added
+    }
+
+    /** Stops tracking a satellite and forgets its reminders. (The caller deletes its cached TLE.) */
+    suspend fun removeTrackedSatellite(noradId: Int) {
+        dataStore.edit {
+            val updated = it.trackedSatellites().filter { s -> s.noradId != noradId }
+            it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(updated)
+            it[Keys.NOTIFY_PASSES] = it[Keys.NOTIFY_PASSES].orEmpty()
+                .filter { encoded -> PassKey.decode(encoded)?.noradId != noradId }
+                .toSet()
+        }
+    }
+
+    private fun Preferences.trackedSatellites(): List<Satellite> =
+        this[Keys.TRACKED_SATELLITES]?.let(TrackedSatellitesCodec::decode) ?: Satellite.DEFAULT_TRACKED
 
     suspend fun setLocationMode(mode: LocationMode) {
         dataStore.edit { it[Keys.LOCATION_MODE] = mode.name }

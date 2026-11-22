@@ -93,6 +93,14 @@ fun planReminders(
     }
 }
 
+/** The selected passes grouped by satellite, and those of satellites that are no longer tracked. */
+data class SelectionSplit(val bySatellite: Map<Int, Set<PassKey>>, val untracked: Set<PassKey>)
+
+fun splitSelection(selected: Set<PassKey>, trackedIds: Set<Int>): SelectionSplit {
+    val (tracked, untracked) = selected.partition { it.noradId in trackedIds }
+    return SelectionSplit(tracked.groupBy { it.noradId }.mapValues { it.value.toSet() }, untracked.toSet())
+}
+
 /** The selection after planning: dropped keys removed, kept keys moved to their recalculated rise time. */
 fun updatedSelection(noradId: Int, plans: List<ReminderPlan>): Set<PassKey> = plans.mapNotNull { plan ->
     when (plan) {
