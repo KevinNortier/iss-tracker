@@ -1,5 +1,10 @@
 # ISS Tracker
 
+[![Latest release](https://img.shields.io/github/v/release/KevinNortier/iss-tracker)](https://github.com/KevinNortier/iss-tracker/releases/latest)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![Android 12+](https://img.shields.io/badge/Android-12%2B-3ddc84?logo=android&logoColor=white)](#requirements)
+[![No Google Play Services](https://img.shields.io/badge/Google%20Play%20Services-not%20needed-success)](#privacy)
+
 An Android app that tells you when the International Space Station, and any other satellite you
 choose, passes over you, where to look, and when you can see it with your own eyes. It works offline,
 doesn't need Google Play Services, and keeps your location on your phone.
@@ -38,10 +43,19 @@ doesn't need Google Play Services, and keeps your location on your phone.
 
 ## Install
 
+<a href="https://github.com/KevinNortier/iss-tracker/releases/latest"><img src="docs/images/badge_github.png" alt="Get it on GitHub" height="48"></a>
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22io.github.kevinnortier.isstracker%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FKevinNortier%2Fiss-tracker%22%2C%22author%22%3A%22KevinNortier%22%2C%22name%22%3A%22ISS%20Tracker%22%2C%22additionalSettings%22%3A%22%7B%5C%22appName%5C%22%3A%5C%22ISS%20Tracker%5C%22%2C%5C%22appAuthor%5C%22%3A%5C%22Kevin%20Nortier%5C%22%2C%5C%22allowedSigningCertHashes%5C%22%3A%5C%226F%3A67%3A21%3A27%3A76%3AF5%3A2E%3A3A%3A81%3A02%3A95%3A81%3AE9%3A0A%3A2C%3AB5%3A12%3ABC%3AEC%3AB7%3AE4%3A0E%3AB8%3AC4%3A94%3A21%3A93%3AB1%3A8A%3A42%3A28%3AD8%5C%22%2C%5C%22about%5C%22%3A%5C%22Pass%20times%2C%20reminders%20and%20Find%20in%20sky%20for%20the%20ISS%20and%20other%20satellites.%20Works%20offline%2C%20no%20Google%20Play%20Services.%5C%22%7D%22%7D"><img src="docs/images/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a>
+
 ### Recommended: Obtainium
 
 [Obtainium](https://obtainium.imranr.dev/) installs apps straight from their GitHub releases, keeps them
 up to date, and checks that every update is signed with the same key.
+
+Tap **Get it on Obtainium** on your phone: it adds ISS Tracker to Obtainium with its name, description
+and signing certificate filled in (Obtainium then refuses updates signed with any other key). If Obtainium isn't
+installed yet, the page helps you get it first.
+
+Or add it by hand:
 
 1. Install Obtainium (see its website).
 2. In Obtainium, tap **Add App** and enter `https://github.com/KevinNortier/iss-tracker`.
@@ -49,18 +63,26 @@ up to date, and checks that every update is signed with the same key.
 
 ### Manual
 
-Download the latest `iss-tracker-<version>-release.apk` from the
-[Releases page](https://github.com/KevinNortier/iss-tracker/releases) and open it on your phone.
-Android asks once to allow installs from your browser or file manager.
+Tap **Get it on GitHub** to open the latest release, download `iss-tracker-<version>-release.apk` and
+open it on your phone. Android asks once to allow installs from your browser or file manager. You won't
+get update notifications this way; check the [Releases page](https://github.com/KevinNortier/iss-tracker/releases)
+now and then.
 
 ### Verify the app
 
 Official builds have this package name and are signed with this certificate:
 
-| | |
-|---|---|
-| Package name | `io.github.kevinnortier.isstracker` |
-| Signing certificate SHA-256 | `6F:67:21:27:76:F5:2E:3A:81:02:95:81:E9:0A:2C:B5:12:BC:EC:B7:E4:0E:B8:C4:94:21:93:B1:8A:42:28:D8` |
+Package name:
+
+```
+io.github.kevinnortier.isstracker
+```
+
+Signing certificate SHA-256:
+
+```
+6F:67:21:27:76:F5:2E:3A:81:02:95:81:E9:0A:2C:B5:12:BC:EC:B7:E4:0E:B8:C4:94:21:93:B1:8A:42:28:D8
+```
 
 To check a downloaded APK on a computer with the Android SDK build tools:
 
@@ -69,7 +91,7 @@ apksigner verify --print-certs iss-tracker-<version>-release.apk
 ```
 
 The `certificate SHA-256 digest` it prints must match the fingerprint above (the same value, without
-colons, in lower case). On the phone, apps like AppVerifier can check an installed app against the
+colons, in lower case). On the phone, apps like [AppVerifier](https://github.com/soupslurpr/AppVerifier) can check an installed app against the
 package name and fingerprint. If they don't match, don't install it.
 
 ## Privacy
@@ -185,6 +207,9 @@ app/src/main/java/io/github/kevinnortier/isstracker/
 ## Credits
 
 - Orbit data: [CelesTrak](https://celestrak.org/) (Dr T.S. Kelso).
+- "Get it on Obtainium" badge: from the [Obtainium](https://github.com/ImranR98/Obtainium) project.
+- "Get it on GitHub" badge: the one Obtainium's README uses, from
+  [OAndBackupX](https://github.com/machiav3lli/oandbackupx).
 - SGP4: David A. Vallado, Paul Crawford, Richard Hujsak, T.S. Kelso, *Revisiting Spacetrack Report #3*
   (AIAA 2006-6753).
 - Test references: [python-sgp4](https://pypi.org/project/sgp4/) (Brandon Rhodes) and
