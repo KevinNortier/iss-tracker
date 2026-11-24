@@ -153,6 +153,22 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `markBright only turns brightness on, for tracked satellites in the list`() = runBlocking {
+        val repo = newRepository()
+        val css = Satellite(48274, "CSS") // stored as faint, e.g. added while offline
+        val so50 = Satellite(27607, "SO-50")
+        val hst = Satellite(20580, "HST", bright = true) // added from "Brightest", missing from the list below
+        listOf(css, so50, hst).forEach { repo.addTrackedSatellite(it) }
+
+        repo.markBright(setOf(48274, 99999))
+
+        assertEquals(
+            listOf(Satellite.ISS, css.copy(bright = true), so50, hst),
+            repo.trackedSatellites.first(),
+        )
+    }
+
+    @Test
     fun `removing a satellite also forgets its reminders`() = runBlocking {
         val repo = newRepository()
         repo.addTrackedSatellite(Satellite(27607, "SO-50"))

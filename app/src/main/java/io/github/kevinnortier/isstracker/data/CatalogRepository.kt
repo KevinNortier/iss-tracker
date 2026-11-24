@@ -4,6 +4,9 @@ import io.github.kevinnortier.isstracker.orbit.Tle
 import io.github.kevinnortier.isstracker.orbit.TleParseException
 import io.github.kevinnortier.isstracker.orbit.TleParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -50,6 +53,15 @@ class CatalogRepository(
 
     private val mutex = Mutex()
 
+    private val _brightListSaved = MutableSharedFlow<Set<Int>>(extraBufferCapacity = 8)
+
+    /**
+     * NORAD IDs of a freshly downloaded "bright" group list (space stations, brightest), emitted each
+     * time one is saved. Lets tracked satellites that were wrongly stored as faint be corrected without
+     * extra downloads.
+     */
+    val brightListSaved: SharedFlow<Set<Int>> = _brightListSaved.asSharedFlow()
+
     /** The satellites in [group], from the cache if it's recent enough. */
     suspend fun group(group: CatalogGroup): List<Tle> = mutex.withLock {
         val cached = readGroup(group)
@@ -59,10 +71,21 @@ class CatalogRepository(
         try {
             val tles = parse(downloader.group(group.query))
             writeGroup(group, tles)
+            if (group.bright) _brightListSaved.tryEmit(tles.map { it.noradId }.toSet())
             tles
         } catch (e: IOException) {
             cached?.second ?: throw e // offline: an old list is better than nothing
         }
+    }
+
+    /**
+     * NORAD IDs in the cached "bright" group lists, however old. Never downloads; empty if none are cached.
+     */
+    suspend fun cachedBrightIds(): Set<Int> = mutex.withLock {
+        CatalogGroup.entries.filter { it.bright }
+            .flatMap { readGroup(it)?.second.orEmpty() }
+            .map { it.noradId }
+            .toSet()
     }
 
     /** Satellites whose name contains [text] (case-insensitive on CelesTrak's side). Empty if none match. */

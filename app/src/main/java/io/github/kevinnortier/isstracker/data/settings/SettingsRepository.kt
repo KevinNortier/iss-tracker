@@ -127,6 +127,21 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         return added
     }
 
+    /**
+     * Marks the tracked satellites whose NORAD ID is in [brightIds] as bright. Only ever turns the flag
+     * on: a satellite missing from a list (lists change, or it was added from the "Brightest" group) is
+     * left as it is. Writes nothing when no flag changes.
+     */
+    suspend fun markBright(brightIds: Set<Int>) {
+        if (brightIds.isEmpty()) return
+        dataStore.edit {
+            val current = it.trackedSatellites()
+            if (current.none { s -> !s.bright && s.noradId in brightIds }) return@edit
+            val updated = current.map { s -> if (s.noradId in brightIds) s.copy(bright = true) else s }
+            it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(updated)
+        }
+    }
+
     /** Stops tracking a satellite and forgets its reminders. (The caller deletes its cached TLE.) */
     suspend fun removeTrackedSatellite(noradId: Int) {
         dataStore.edit {

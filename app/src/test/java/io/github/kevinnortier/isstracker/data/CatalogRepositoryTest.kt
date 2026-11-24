@@ -3,6 +3,8 @@ package io.github.kevinnortier.isstracker.data
 import io.github.kevinnortier.isstracker.orbit.TestUtil
 import io.github.kevinnortier.isstracker.orbit.TleParser
 import io.github.kevinnortier.isstracker.ui.satellites.toCatalogItems
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -144,6 +146,33 @@ class CatalogRepositoryTest {
     fun `brightness check is false when the groups can't be loaded`() = runBlocking {
         fake.offline = true
         assertFalse(repo.isBright(25544))
+    }
+
+    @Test
+    fun `cached bright IDs come from the cache only, however old`() = runBlocking {
+        fake.offline = true
+        assertEquals(emptySet<Int>(), repo.cachedBrightIds())
+        assertEquals(0, fake.groupCalls)
+
+        fake.offline = false
+        repo.group(CatalogGroup.STATIONS)
+        repo.group(CatalogGroup.AMATEUR) // not a bright group
+        clock.now = clock.now.plus(Duration.ofDays(30))
+        val calls = fake.groupCalls
+        assertEquals(setOf(25544, 48274), repo.cachedBrightIds())
+        assertEquals(calls, fake.groupCalls)
+    }
+
+    @Test
+    fun `downloading a bright group list announces its IDs`() = runBlocking {
+        val announced = mutableListOf<Set<Int>>()
+        val job = launch(Dispatchers.Unconfined) { repo.brightListSaved.collect { announced += it } }
+        repo.group(CatalogGroup.STATIONS)
+        repo.group(CatalogGroup.STATIONS) // from the cache: no new announcement
+        repo.group(CatalogGroup.AMATEUR) // not a bright group
+        repo.group(CatalogGroup.BRIGHTEST)
+        job.cancel()
+        assertEquals(listOf(setOf(25544, 48274), setOf(20580)), announced)
     }
 
     @Test

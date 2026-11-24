@@ -81,6 +81,20 @@ class IssTrackerApp : Application() {
         ReminderNotifications.createChannel(this)
         TleRefreshWorker.schedule(this)
         keepRemindersUpToDate()
+        keepBrightFlagsUpToDate()
+    }
+
+    /**
+     * Corrects tracked satellites stored as faint because the brightness check couldn't load the
+     * "bright" group lists when they were added (e.g. offline). Uses only lists already on the phone:
+     * the cached ones at start, then each one the app downloads anyway. Never downloads by itself.
+     */
+    private fun keepBrightFlagsUpToDate() {
+        val c = container
+        appScope.launch {
+            launch { c.catalogRepository.brightListSaved.collect { c.settingsRepository.markBright(it) } }
+            c.settingsRepository.markBright(c.catalogRepository.cachedBrightIds())
+        }
     }
 
     /**
