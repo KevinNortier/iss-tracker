@@ -13,14 +13,15 @@ doesn't need Google Play Services, and keeps your location on your phone.
 
 - **Satellites** — tracks the ISS by default. Add up to 20 satellites by browsing CelesTrak's lists
   (space stations, amateur radio, weather, brightest), searching by name, or entering a NORAD ID;
-  remove and reorder them in Settings → Satellites. Each satellite has its own colour. Only
+  remove and reorder them in Settings → Satellites. Each satellite gets its own colour when it's
+  added (different ones for the first 8) and keeps it when you reorder or remove others. Only
   low-Earth orbits are supported for now (high orbits are shown greyed out).
 - **Pass list** — every pass of every tracked satellite for the next 10 days in one list, grouped by
   day: rise → highest point → set, with compass directions, maximum elevation and duration. Filter
   chips show all satellites or just the ones you pick. Passes you can see with the naked eye
-  (sunlit while your sky is dark) are marked with a ★. That's only for bright satellites: space
-  stations and CelesTrak's "brightest" list. Other satellites get a "sunlit" note instead, since most
-  are too faint to see.
+  (sunlit while your sky is dark) are marked with a ★, and the "Visible" chip shows only those.
+  That's only for bright satellites: space stations and CelesTrak's "brightest" list. Other
+  satellites get a "sunlit" note instead, since most are too faint to see.
 - **Next / current pass** — a countdown to the next pass, or live azimuth and elevation during one.
 - **Pass details** — a sky plot of the path (centre = straight up, edge = horizon, north up) with the
   sunlit part highlighted.
@@ -38,6 +39,7 @@ doesn't need Google Play Services, and keeps your location on your phone.
   updated orbit data.
 - **Location** — your current position (GPS / network) or a saved location you enter by hand.
 - **Minimum elevation** — hide low passes behind trees and buildings (0° / 5° / 10° / 20°).
+- **Minimum highest point** — hide passes that never get high enough (up to 45°).
 - **Themes** — system, light, dark, and a red-on-black night mode that keeps your eyes dark-adapted.
 - **Details screen** — distance, range rate, sunlight, sun elevation and the age of the orbit data.
 
