@@ -76,6 +76,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[Keys.PASS_FILTER] = noradIds.map(Int::toString).toSet() }
     }
 
+    /**
+     * Replaces the pass filter with [transform] of the stored filter and the tracked satellites, both read
+     * inside the same DataStore transaction, so quick repeated taps each build on the previous one.
+     */
+    suspend fun updatePassFilter(transform: (stored: Set<Int>, tracked: List<Satellite>) -> Set<Int>) {
+        dataStore.edit {
+            val stored = it[Keys.PASS_FILTER].orEmpty().mapNotNull { id -> id.toIntOrNull() }.toSet()
+            it[Keys.PASS_FILTER] = transform(stored, it.trackedSatellites()).map(Int::toString).toSet()
+        }
+    }
+
     /** True when the pass list only shows passes visible to the naked eye. */
     val passVisibleOnly: Flow<Boolean> = dataStore.data
         .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }

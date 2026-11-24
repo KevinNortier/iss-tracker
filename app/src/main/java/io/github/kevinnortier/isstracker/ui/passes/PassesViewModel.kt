@@ -66,6 +66,23 @@ fun effectiveFilter(filter: Set<Int>, tracked: List<Satellite>): Set<Int> {
     return (filter intersect trackedIds).ifEmpty { trackedIds }
 }
 
+/**
+ * The filter to store after tapping a satellite chip ([noradId]) or "All" (null), given the [stored] filter.
+ * Showing everything (or nothing) is stored as "all", i.e. empty.
+ */
+fun toggledFilter(stored: Set<Int>, tracked: List<Satellite>, noradId: Int?): Set<Int> {
+    val all = tracked.map { it.noradId }.toSet()
+    val shown = effectiveFilter(stored, tracked)
+    val newFilter = when {
+        noradId == null -> emptySet()
+        // Tapping a satellite while showing all: show only that one.
+        shown == all -> setOf(noradId)
+        noradId in shown -> shown - noradId
+        else -> shown + noradId
+    }
+    return if (newFilter.isEmpty() || newFilter == all) emptySet() else newFilter
+}
+
 /** Only the passes visible to the naked eye when [visibleOnly], otherwise all of them. */
 fun filterVisible(passes: List<SatPass>, visibleOnly: Boolean): List<SatPass> =
     if (visibleOnly) passes.filter { it.visibleToEye } else passes
@@ -294,17 +311,7 @@ class PassesViewModel(
     /** Shows or hides a satellite in the list; "all" when [noradId] is null. */
     fun toggleFilter(noradId: Int?) {
         viewModelScope.launch {
-            val state = uiState.value
-            val newFilter = when {
-                noradId == null -> emptySet()
-                // Tapping a satellite while showing all: show only that one.
-                state.shown.size == state.tracked.size -> setOf(noradId)
-                noradId in state.shown -> state.shown - noradId
-                else -> state.shown + noradId
-            }
-            // Showing everything (or nothing) is stored as "all".
-            val all = state.tracked.map { it.noradId }.toSet()
-            container.settingsRepository.setPassFilter(if (newFilter.isEmpty() || newFilter == all) emptySet() else newFilter)
+            container.settingsRepository.updatePassFilter { stored, tracked -> toggledFilter(stored, tracked, noradId) }
         }
     }
 

@@ -131,6 +131,25 @@ class SelectPassesTest {
     }
 
     @Test
+    fun `tapping satellite chips and All gives the expected stored filter`() {
+        val tracked = listOf(iss, css, faint)
+        val all = emptySet<Int>() // "all" is stored as empty
+
+        // Showing all: tapping a satellite shows only that one.
+        assertEquals(setOf(css.noradId), toggledFilter(all, tracked, css.noradId))
+        // Adding one, then removing it again.
+        assertEquals(setOf(css.noradId, faint.noradId), toggledFilter(setOf(css.noradId), tracked, faint.noradId))
+        assertEquals(setOf(css.noradId), toggledFilter(setOf(css.noradId, faint.noradId), tracked, faint.noradId))
+        // Removing the last shown satellite, or adding the last hidden one, means "all".
+        assertEquals(all, toggledFilter(setOf(css.noradId), tracked, css.noradId))
+        assertEquals(all, toggledFilter(setOf(iss.noradId, css.noradId), tracked, faint.noradId))
+        // "All" always resets.
+        assertEquals(all, toggledFilter(setOf(css.noradId), tracked, null))
+        // A stale filter (satellite no longer tracked) counts as "all".
+        assertEquals(setOf(iss.noradId), toggledFilter(setOf(99999), tracked, iss.noradId))
+    }
+
+    @Test
     fun `minimum highest point hides lower passes and keeps ones exactly at it`() {
         val low = SatPass(iss, pass(0, 10, apexDeg = 12.0))
         val edge = SatPass(iss, pass(90, 100, apexDeg = 30.0))

@@ -9,6 +9,8 @@ import io.github.kevinnortier.isstracker.sensors.PointingAxis
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -234,5 +236,22 @@ class SettingsRepositoryTest {
         assertEquals(setOf(25544, 48274), repo.passFilter.first())
         repo.setPassFilter(emptySet())
         assertEquals(emptySet<Int>(), repo.passFilter.first())
+    }
+
+    @Test
+    fun `simultaneous pass filter updates each build on the previous one`() = runBlocking {
+        val repo = newRepository()
+        repo.addTrackedSatellite(Satellite(48274, "CSS"))
+        // Many updates at once, each adding one ID: none may be lost to a stale read.
+        val ids = (1..20).toList()
+        ids.map { id ->
+            async(Dispatchers.IO) {
+                repo.updatePassFilter { stored, tracked ->
+                    assertEquals(listOf(25544, 48274), tracked.map { it.noradId })
+                    stored + id
+                }
+            }
+        }.awaitAll()
+        assertEquals(ids.toSet(), repo.passFilter.first())
     }
 }
