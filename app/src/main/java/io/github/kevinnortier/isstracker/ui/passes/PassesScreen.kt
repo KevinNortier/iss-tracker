@@ -183,9 +183,10 @@ fun PassesRoute(
                         item(key = "empty") {
                             Text(
                                 if (state.visibleOnly) {
-                                    "No passes visible to the naked eye in the next 10 days."
+                                    "No passes visible to the naked eye${reachPhrase(state)} in the next 10 days."
                                 } else {
-                                    "No passes above ${Format.degrees0(state.minElevationDeg)} in the next 10 days."
+                                    "No passes above ${Format.degrees0(state.minElevationDeg)}${reachPhrase(state)} " +
+                                        "in the next 10 days."
                                 },
                             )
                         }
@@ -232,6 +233,17 @@ private fun NoSatellitesCard(onOpenSatellites: () -> Unit) {
         }
     }
 }
+
+/**
+ * " that reach 30°" when the minimum highest point setting hides low passes, otherwise "" (also when it's
+ * at or below the minimum elevation, where it has no effect).
+ */
+private fun reachPhrase(state: PassesUiState): String =
+    if (state.minApexElevationDeg > state.minElevationDeg) {
+        " that reach ${Format.degrees0(state.minApexElevationDeg)}"
+    } else {
+        ""
+    }
 
 /** "Visible" (naked-eye passes only), plus "All" and one chip per tracked satellite when there are several. */
 @Composable
@@ -560,7 +572,7 @@ private fun Footer(state: PassesUiState, locationSummary: String) {
         Text(
             withCenteredArrows(
                 (if (state.visibleOnly) "Passes visible to the naked eye" else "Passes") +
-                    " above ${Format.degrees0(state.minElevationDeg)}, 10 days ahead. " +
+                    " above ${Format.degrees0(state.minElevationDeg)}${reachPhrase(state)}, 10 days ahead. " +
                     "Times are rise → highest → set.",
             ),
             style = MaterialTheme.typography.bodySmall,

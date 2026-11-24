@@ -70,6 +70,10 @@ fun effectiveFilter(filter: Set<Int>, tracked: List<Satellite>): Set<Int> {
 fun filterVisible(passes: List<SatPass>, visibleOnly: Boolean): List<SatPass> =
     if (visibleOnly) passes.filter { it.visibleToEye } else passes
 
+/** Only the passes whose highest point is at least [minApexDeg] high. */
+fun filterMinApex(passes: List<SatPass>, minApexDeg: Double): List<SatPass> =
+    if (minApexDeg <= 0.0) passes else passes.filter { it.pass.apex.elevationDeg >= minApexDeg }
+
 /** Passes that haven't ended at a moment, the ones in progress, and the next one to start. */
 data class PassSelection(val upcoming: List<SatPass>, val current: List<SatPass>, val next: SatPass?)
 
@@ -108,6 +112,8 @@ data class PassesUiState(
     /** Where the satellite of the first current pass is right now. */
     val currentLook: LookAngles? = null,
     val minElevationDeg: Double = 0.0,
+    /** Passes whose highest point is lower than this are hidden (0 = none hidden). */
+    val minApexElevationDeg: Double = 0.0,
     /** Oldest orbit data among the shown satellites (for the footer). */
     val oldestTleEpoch: Instant? = null,
     /** Shown satellites without orbit data, or whose passes can't be calculated. */
@@ -207,6 +213,7 @@ class PassesViewModel(
     private data class ListInputs(
         val filter: Set<Int>,
         val visibleOnly: Boolean,
+        val minApexDeg: Double,
         val selected: Set<PassKey>,
         val failures: Set<Int>,
     )
@@ -214,9 +221,11 @@ class PassesViewModel(
     private val listInputs = combine(
         container.settingsRepository.passFilter,
         container.settingsRepository.passVisibleOnly,
+        // Only filters the list, so changing it doesn't recalculate the passes.
+        container.settingsRepository.settings.map { it.minApexElevationDeg }.distinctUntilChanged(),
         container.settingsRepository.selectedPasses,
         downloadFailures,
-    ) { filter, visibleOnly, selected, failures -> ListInputs(filter, visibleOnly, selected, failures) }
+    ) { filter, visibleOnly, minApex, selected, failures -> ListInputs(filter, visibleOnly, minApex, selected, failures) }
 
     val uiState: StateFlow<PassesUiState> = combine(
         prediction,
@@ -224,7 +233,7 @@ class PassesViewModel(
         tles,
         listInputs,
         secondTicker(clock),
-    ) { prediction, tracked, tles, (filter, visibleOnly, selected, failures), now ->
+    ) { prediction, tracked, tles, (filter, visibleOnly, minApex, selected, failures), now ->
         val shown = effectiveFilter(filter, tracked)
         val base = PassesUiState(
             title = passesTitle(tracked),
@@ -232,6 +241,7 @@ class PassesViewModel(
             tracked = tracked,
             shown = shown,
             visibleOnly = visibleOnly,
+            minApexElevationDeg = minApex,
             oldestTleEpoch = tles.filter { it.first.noradId in shown }.mapNotNull { it.second?.epoch }.minOrNull(),
             now = now,
         )
@@ -247,7 +257,9 @@ class PassesViewModel(
                 val withoutData = shownPredictions
                     .filter { it.predictor == null && !stillLoading(it.satellite.noradId) }
                     .map { it.satellite }
-                val merged = filterVisible(mergePasses(shownPredictions.map { it.satellite to it.passes }), visibleOnly)
+                val merged = mergePasses(shownPredictions.map { it.satellite to it.passes })
+                    .let { filterVisible(it, visibleOnly) }
+                    .let { filterMinApex(it, minApex) }
                 val selection = selectPasses(merged, now)
                 val firstCurrent = selection.current.firstOrNull()
                 base.copy(

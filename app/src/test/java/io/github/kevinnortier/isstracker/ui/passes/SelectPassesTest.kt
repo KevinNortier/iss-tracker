@@ -14,9 +14,9 @@ class SelectPassesTest {
 
     private fun t(minute: Long): Instant = Instant.parse("2026-11-22T18:00:00Z").plusSeconds(minute * 60)
 
-    private fun pass(riseMinute: Long, setMinute: Long, visible: Boolean = false) = Pass(
+    private fun pass(riseMinute: Long, setMinute: Long, visible: Boolean = false, apexDeg: Double = 30.0) = Pass(
         rise = SkyPoint(t(riseMinute), 200.0, 0.0),
-        apex = SkyPoint(t((riseMinute + setMinute) / 2), 150.0, 30.0),
+        apex = SkyPoint(t((riseMinute + setMinute) / 2), 150.0, apexDeg),
         set = SkyPoint(t(setMinute), 100.0, 0.0),
         visible = visible,
         visibleFrom = if (visible) t(riseMinute) else null,
@@ -128,5 +128,17 @@ class SelectPassesTest {
 
         assertEquals(listOf(visibleIss), filterVisible(passes, visibleOnly = true))
         assertEquals(passes, filterVisible(passes, visibleOnly = false))
+    }
+
+    @Test
+    fun `minimum highest point hides lower passes and keeps ones exactly at it`() {
+        val low = SatPass(iss, pass(0, 10, apexDeg = 12.0))
+        val edge = SatPass(iss, pass(90, 100, apexDeg = 30.0))
+        val high = SatPass(css, pass(180, 190, apexDeg = 75.0))
+        val passes = listOf(low, edge, high)
+
+        assertEquals(passes, filterMinApex(passes, 0.0))
+        assertEquals(listOf(edge, high), filterMinApex(passes, 30.0))
+        assertEquals(listOf(high), filterMinApex(passes, 45.0))
     }
 }

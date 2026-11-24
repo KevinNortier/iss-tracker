@@ -34,6 +34,8 @@ data class AppSettings(
     val lastFix: LocationFix? = null,
     /** A pass only counts while the satellite is at least this high above the horizon. */
     val minElevationDeg: Double = DEFAULT_MIN_ELEVATION_DEG,
+    /** The pass list hides passes whose highest point is lower than this. 0 = show all. */
+    val minApexElevationDeg: Double = DEFAULT_MIN_APEX_ELEVATION_DEG,
     /** Reminders count down to the rise or to the highest point of the pass. */
     val notifyTrigger: NotifyTrigger = NotifyTrigger.RISE,
     /** How many minutes before the trigger moment the reminder is shown. */
@@ -47,6 +49,9 @@ data class AppSettings(
     companion object {
         const val DEFAULT_MIN_ELEVATION_DEG = 0.0
         val MIN_ELEVATION_CHOICES = listOf(0.0, 5.0, 10.0, 20.0)
+
+        const val DEFAULT_MIN_APEX_ELEVATION_DEG = 0.0
+        val MIN_APEX_ELEVATION_CHOICES = listOf(0.0, 10.0, 20.0, 30.0, 45.0)
 
         const val DEFAULT_NOTIFY_LEAD_MINUTES = 15
         val NOTIFY_LEAD_CHOICES = listOf(5, 10, 15, 30, 60)

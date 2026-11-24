@@ -44,6 +44,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val FIX_PROVIDER = stringPreferencesKey("fix_provider")
 
         val MIN_ELEVATION = doublePreferencesKey("min_elevation_deg")
+        val MIN_APEX_ELEVATION = doublePreferencesKey("min_apex_elevation_deg")
 
         val NOTIFY_TRIGGER = stringPreferencesKey("notify_trigger")
         val NOTIFY_LEAD = intPreferencesKey("notify_lead_min")
@@ -185,6 +186,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[Keys.MIN_ELEVATION] = degrees }
     }
 
+    suspend fun setMinApexElevation(degrees: Double) {
+        require(degrees in 0.0..90.0) { "Minimum highest point must be between 0 and 90 degrees" }
+        dataStore.edit { it[Keys.MIN_APEX_ELEVATION] = degrees }
+    }
+
     suspend fun setNotifyTrigger(trigger: NotifyTrigger) {
         dataStore.edit { it[Keys.NOTIFY_TRIGGER] = trigger.name }
     }
@@ -254,6 +260,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
         val minElevation = this[Keys.MIN_ELEVATION]?.takeIf { it in 0.0..45.0 }
             ?: AppSettings.DEFAULT_MIN_ELEVATION_DEG
+        val minApexElevation = this[Keys.MIN_APEX_ELEVATION]?.takeIf { it in 0.0..90.0 }
+            ?: AppSettings.DEFAULT_MIN_APEX_ELEVATION_DEG
 
         val trigger = this[Keys.NOTIFY_TRIGGER]
             ?.let { name -> NotifyTrigger.entries.firstOrNull { it.name == name } }
@@ -277,6 +285,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             savedLocation = saved,
             lastFix = fix,
             minElevationDeg = minElevation,
+            minApexElevationDeg = minApexElevation,
             notifyTrigger = trigger,
             notifyLeadMinutes = lead,
             pointingAxis = axis,

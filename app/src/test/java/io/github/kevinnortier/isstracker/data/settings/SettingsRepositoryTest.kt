@@ -84,6 +84,19 @@ class SettingsRepositoryTest {
         assertEquals(10.0, repo.settings.first().minElevationDeg, 0.0)
     }
 
+    @Test
+    fun `minimum highest point defaults to any and can be changed`() = runBlocking {
+        val repo = newRepository()
+        assertEquals(0.0, repo.settings.first().minApexElevationDeg, 0.0)
+        repo.setMinApexElevation(30.0)
+        assertEquals(30.0, repo.settings.first().minApexElevationDeg, 0.0)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `minimum highest point above 90 is rejected`() {
+        runBlocking { newRepository().setMinApexElevation(91.0) }
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `minimum elevation outside 0 to 45 is rejected`() {
         runBlocking { newRepository().setMinElevation(60.0) }

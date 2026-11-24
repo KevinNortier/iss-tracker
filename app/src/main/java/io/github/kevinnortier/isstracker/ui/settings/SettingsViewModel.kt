@@ -71,6 +71,10 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
         viewModelScope.launch { repository.setMinElevation(degrees) }
     }
 
+    fun setMinApexElevation(degrees: Double) {
+        viewModelScope.launch { repository.setMinApexElevation(degrees) }
+    }
+
     fun setNotifyTrigger(trigger: NotifyTrigger) {
         viewModelScope.launch { repository.setNotifyTrigger(trigger) }
     }

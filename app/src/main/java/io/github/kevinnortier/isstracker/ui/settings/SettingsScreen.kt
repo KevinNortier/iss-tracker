@@ -71,6 +71,7 @@ fun SettingsRoute(
         onBack = onBack,
         onLocationModeChange = viewModel::setLocationMode,
         onMinElevationChange = viewModel::setMinElevation,
+        onMinApexElevationChange = viewModel::setMinApexElevation,
         onNotifyTriggerChange = viewModel::setNotifyTrigger,
         onNotifyLeadChange = viewModel::setNotifyLeadMinutes,
         onPointingAxisChange = viewModel::setPointingAxis,
@@ -93,6 +94,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onLocationModeChange: (LocationMode) -> Unit,
     onMinElevationChange: (Double) -> Unit,
+    onMinApexElevationChange: (Double) -> Unit,
     onNotifyTriggerChange: (NotifyTrigger) -> Unit,
     onNotifyLeadChange: (Int) -> Unit,
     onPointingAxisChange: (PointingAxis) -> Unit,
@@ -196,6 +198,18 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            Text("Minimum highest point", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Hides passes that never get this high. Starts at the minimum elevation, since every pass gets at " +
+                    "least that high. Reminders you have already set still go off.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            MinApexChips(
+                minElevationDeg = state.settings.minElevationDeg,
+                minApexElevationDeg = state.settings.minApexElevationDeg,
+                onChange = onMinApexElevationChange,
+            )
 
             HorizontalDivider()
 
@@ -407,6 +421,31 @@ private fun NumberField(
     )
 }
 
+/**
+ * The first chip turns the filter off and is labelled with the minimum elevation, the lowest any pass
+ * can reach. After it come only the choices above the minimum elevation; lower ones would do nothing.
+ */
+@Composable
+private fun MinApexChips(minElevationDeg: Double, minApexElevationDeg: Double, onChange: (Double) -> Unit) {
+    // A stored value at or below the minimum elevation (e.g. the minimum elevation was raised later) has no
+    // effect, so it shows as "off".
+    val off = minApexElevationDeg <= minElevationDeg
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = off,
+            onClick = { onChange(0.0) },
+            label = { Text("${minElevationDeg.toInt()}°") },
+        )
+        AppSettings.MIN_APEX_ELEVATION_CHOICES.filter { it > minElevationDeg }.forEach { degrees ->
+            FilterChip(
+                selected = !off && minApexElevationDeg == degrees,
+                onClick = { onChange(degrees) },
+                label = { Text("${degrees.toInt()}°") },
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun SettingsScreenPreview() {
@@ -417,6 +456,7 @@ private fun SettingsScreenPreview() {
             onBack = {},
             onLocationModeChange = {},
             onMinElevationChange = {},
+            onMinApexElevationChange = {},
             onNotifyTriggerChange = {},
             onNotifyLeadChange = {},
             onPointingAxisChange = {},
