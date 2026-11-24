@@ -157,10 +157,13 @@ class SettingsRepositoryTest {
         val repo = newRepository()
         val so50 = Satellite(27607, "SO-50")
         assertEquals(true, repo.addTrackedSatellite(so50))
-        assertEquals(listOf(Satellite.ISS, so50), repo.trackedSatellites.first())
-        // Same NORAD ID again: updated, not duplicated.
-        repo.addTrackedSatellite(Satellite(25544, "ISS (ZARYA)", bright = true))
-        assertEquals(listOf(Satellite(25544, "ISS (ZARYA)", bright = true), so50), repo.trackedSatellites.first())
+        assertEquals(listOf(Satellite.ISS, so50.copy(colorIndex = 1)), repo.trackedSatellites.first())
+        // Same NORAD ID again: updated, not duplicated, and keeps its colour.
+        repo.addTrackedSatellite(Satellite(25544, "ISS (ZARYA)", bright = true, colorIndex = 5))
+        assertEquals(
+            listOf(Satellite(25544, "ISS (ZARYA)", bright = true, colorIndex = 0), so50.copy(colorIndex = 1)),
+            repo.trackedSatellites.first(),
+        )
         // Fill up to the limit; the next one is refused.
         for (id in 1..(Satellite.MAX_TRACKED - 2)) assertEquals(true, repo.addTrackedSatellite(Satellite(id, "S$id")))
         assertEquals(false, repo.addTrackedSatellite(Satellite(99999, "one too many")))
@@ -178,9 +181,30 @@ class SettingsRepositoryTest {
         repo.markBright(setOf(48274, 99999))
 
         assertEquals(
-            listOf(Satellite.ISS, css.copy(bright = true), so50, hst),
+            listOf(
+                Satellite.ISS,
+                css.copy(bright = true, colorIndex = 1),
+                so50.copy(colorIndex = 2),
+                hst.copy(colorIndex = 3),
+            ),
             repo.trackedSatellites.first(),
         )
+    }
+
+    @Test
+    fun `colours stay put when satellites are removed or reordered, and freed ones are reused`() = runBlocking {
+        val repo = newRepository()
+        (1..3).forEach { repo.addTrackedSatellite(Satellite(it, "S$it")) }
+        fun colors() = runBlocking { repo.trackedSatellites.first().associate { it.noradId to it.colorIndex } }
+        assertEquals(mapOf(25544 to 0, 1 to 1, 2 to 2, 3 to 3), colors())
+
+        repo.removeTrackedSatellite(1)
+        repo.setTrackedSatellites(repo.trackedSatellites.first().reversed())
+        assertEquals(mapOf(25544 to 0, 2 to 2, 3 to 3), colors())
+
+        // The freed colour goes to the next satellite added.
+        repo.addTrackedSatellite(Satellite(4, "S4"))
+        assertEquals(1, colors()[4])
     }
 
     @Test

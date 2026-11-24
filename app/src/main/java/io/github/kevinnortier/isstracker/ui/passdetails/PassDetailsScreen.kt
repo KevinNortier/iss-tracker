@@ -142,7 +142,7 @@ private fun Header(state: PassDetailsUiState, pass: Pass) {
     val today = state.now.atZone(zone).toLocalDate()
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SatelliteDot(state.noradId)
+            SatelliteDot(state.colorIndex)
             Spacer(Modifier.width(8.dp))
             Text(state.satelliteName, style = MaterialTheme.typography.titleMedium)
         }

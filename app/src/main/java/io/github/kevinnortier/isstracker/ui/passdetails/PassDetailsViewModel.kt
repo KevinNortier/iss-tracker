@@ -38,6 +38,8 @@ data class PassDetailsUiState(
     val satelliteName: String,
     /** Bright enough to see with the eye when sunlit (otherwise "visible" only means sunlit). */
     val bright: Boolean = true,
+    /** The satellite's colour (null, i.e. grey, if it's no longer tracked). */
+    val colorIndex: Int? = null,
     val loading: Boolean = true,
     /** Set when the pass can't be found (e.g. it's over, or no longer above the minimum elevation). */
     val notFound: Boolean = false,
@@ -115,6 +117,7 @@ class PassDetailsViewModel(
             noradId = noradId,
             satelliteName = satellite?.displayName ?: "#$noradId",
             bright = satellite?.bright ?: false,
+            colorIndex = satellite?.colorIndex,
             now = now,
         )
         when {

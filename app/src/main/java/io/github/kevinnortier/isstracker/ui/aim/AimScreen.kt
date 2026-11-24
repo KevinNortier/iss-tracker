@@ -149,7 +149,7 @@ private fun SatelliteSelector(tracked: List<Satellite>, selectedId: Int, onSelec
                     selected = s.noradId == selectedId,
                     onClick = { onSelect(s.noradId) },
                     label = { Text(s.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    leadingIcon = { SatelliteDot(s.noradId, size = 8.dp) },
+                    leadingIcon = { SatelliteDot(s.colorIndex, size = 8.dp) },
                 )
             }
         }

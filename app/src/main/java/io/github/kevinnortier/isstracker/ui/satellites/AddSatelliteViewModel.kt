@@ -44,7 +44,8 @@ data class AddSatelliteUiState(
     val searchResult: ResultList = ResultList.Idle,
     val noradText: String = "",
     val noradResult: ResultList = ResultList.Idle,
-    val trackedIds: Set<Int> = emptySet(),
+    /** Colour of each tracked satellite, by NORAD ID (the keys are the tracked IDs). */
+    val trackedColors: Map<Int, Int?> = emptyMap(),
     val full: Boolean = false,
     /** NORAD IDs being added right now (button disabled meanwhile). */
     val adding: Set<Int> = emptySet(),
@@ -75,7 +76,10 @@ class AddSatelliteViewModel(private val container: AppContainer) : ViewModel() {
 
     val uiState: StateFlow<AddSatelliteUiState> =
         combine(local, container.settingsRepository.trackedSatellites) { state, tracked ->
-            state.copy(trackedIds = tracked.map { it.noradId }.toSet(), full = tracked.size >= Satellite.MAX_TRACKED)
+            state.copy(
+                trackedColors = tracked.associate { it.noradId to it.colorIndex },
+                full = tracked.size >= Satellite.MAX_TRACKED,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AddSatelliteUiState())
 
     fun selectTab(tab: AddTab) = local.update { it.copy(tab = tab) }

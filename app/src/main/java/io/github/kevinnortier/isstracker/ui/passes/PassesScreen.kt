@@ -263,7 +263,7 @@ private fun FilterChips(state: PassesUiState, onToggle: (Int?) -> Unit, onToggle
                     selected = !all && s.noradId in state.shown,
                     onClick = { onToggle(s.noradId) },
                     label = { Text(s.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    leadingIcon = { SatelliteDot(s.noradId, size = 8.dp) },
+                    leadingIcon = { SatelliteDot(s.colorIndex, size = 8.dp) },
                 )
             }
         }
@@ -417,7 +417,7 @@ private fun CardTitle(title: String, sp: SatPass, showName: Boolean) {
 @Composable
 private fun SatelliteLabel(satellite: Satellite, fontSizeSp: Float = 12f) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-        SatelliteDot(satellite.noradId, size = 8.dp)
+        SatelliteDot(satellite.colorIndex, size = 8.dp)
         Spacer(Modifier.size(6.dp))
         Text(
             satellite.displayName,

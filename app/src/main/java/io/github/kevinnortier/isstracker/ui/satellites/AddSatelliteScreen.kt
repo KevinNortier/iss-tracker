@@ -216,7 +216,14 @@ private fun ResultsList(
             is ResultList.Loaded -> {
                 if (result.items.isEmpty()) item(key = "empty") { Text(emptyText) }
                 items(result.items, key = { it.noradId }) { item ->
-                    CatalogRow(item, tracked = item.noradId in state.trackedIds, adding = item.noradId in state.adding, full = state.full, onAdd = { onAdd(item) })
+                    CatalogRow(
+                        item,
+                        tracked = item.noradId in state.trackedColors,
+                        colorIndex = state.trackedColors[item.noradId],
+                        adding = item.noradId in state.adding,
+                        full = state.full,
+                        onAdd = { onAdd(item) },
+                    )
                 }
             }
         }
@@ -224,13 +231,21 @@ private fun ResultsList(
 }
 
 @Composable
-private fun CatalogRow(item: CatalogItem, tracked: Boolean, adding: Boolean, full: Boolean, onAdd: () -> Unit) {
+private fun CatalogRow(
+    item: CatalogItem,
+    tracked: Boolean,
+    /** The satellite's colour if it's tracked; null (grey) if not. */
+    colorIndex: Int?,
+    adding: Boolean,
+    full: Boolean,
+    onAdd: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SatelliteDot(item.noradId, size = 10.dp)
+            SatelliteDot(colorIndex, size = 10.dp)
             Spacer(Modifier.size(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(

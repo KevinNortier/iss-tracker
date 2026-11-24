@@ -151,7 +151,7 @@ private fun SatelliteRow(
             Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SatelliteDot(s.noradId, size = 12.dp)
+            SatelliteDot(s.colorIndex, size = 12.dp)
             Spacer(Modifier.size(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

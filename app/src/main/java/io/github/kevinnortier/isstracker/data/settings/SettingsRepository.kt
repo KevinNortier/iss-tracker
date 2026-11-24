@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import io.github.kevinnortier.isstracker.Satellite
 import io.github.kevinnortier.isstracker.TrackedSatellitesCodec
+import io.github.kevinnortier.isstracker.assignColors
 import io.github.kevinnortier.isstracker.notify.PassKey
 import io.github.kevinnortier.isstracker.orbit.GeodeticLocation
 import io.github.kevinnortier.isstracker.sensors.HeadingSource
@@ -116,13 +117,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setTrackedSatellites(satellites: List<Satellite>) {
         dataStore.edit {
-            it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(satellites.distinctBy { s -> s.noradId })
+            val list = assignColors(satellites.distinctBy { s -> s.noradId })
+            it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(list)
         }
     }
 
     /**
-     * Adds [satellite] to the end of the list (or updates its name/brightness if already tracked).
-     * Returns false if the list is full ([Satellite.MAX_TRACKED]).
+     * Adds [satellite] to the end of the list with the least used colour (or updates its name/brightness
+     * if already tracked, keeping its colour). Returns false if the list is full ([Satellite.MAX_TRACKED]).
      */
     suspend fun addTrackedSatellite(satellite: Satellite): Boolean {
         var added = true
@@ -130,9 +132,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             val current = it.trackedSatellites()
             val index = current.indexOfFirst { s -> s.noradId == satellite.noradId }
             val updated = when {
-                index >= 0 -> current.toMutableList().also { list -> list[index] = satellite }
+                index >= 0 -> current.toMutableList().also { list ->
+                    list[index] = satellite.copy(colorIndex = current[index].colorIndex)
+                }
                 current.size >= Satellite.MAX_TRACKED -> { added = false; current }
-                else -> current + satellite
+                else -> assignColors(current + satellite.copy(colorIndex = null))
             }
             it[Keys.TRACKED_SATELLITES] = TrackedSatellitesCodec.encode(updated)
         }
@@ -165,8 +169,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    /**
+     * The tracked list, every satellite with a colour. Lists saved before colours were stored get theirs
+     * here, in list order; they're saved with the next change to the list.
+     */
     private fun Preferences.trackedSatellites(): List<Satellite> =
-        this[Keys.TRACKED_SATELLITES]?.let(TrackedSatellitesCodec::decode) ?: Satellite.DEFAULT_TRACKED
+        this[Keys.TRACKED_SATELLITES]?.let { assignColors(TrackedSatellitesCodec.decode(it)) } ?: Satellite.DEFAULT_TRACKED
 
     suspend fun setLocationMode(mode: LocationMode) {
         dataStore.edit { it[Keys.LOCATION_MODE] = mode.name }
