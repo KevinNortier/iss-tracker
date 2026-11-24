@@ -164,9 +164,7 @@ fun PassesRoute(
                             Spacer(Modifier.height(8.dp))
                         }
                     }
-                    if (state.tracked.size > 1) {
-                        item(key = "filter") { FilterChips(state, viewModel::toggleFilter) }
-                    }
+                    item(key = "filter") { FilterChips(state, viewModel::toggleFilter, viewModel::toggleVisibleOnly) }
                     item(key = "headline") {
                         HeadlineCard(state, onOpenLive, onOpenAim, onToggleReminder)
                         Spacer(Modifier.height(8.dp))
@@ -183,7 +181,13 @@ fun PassesRoute(
                     }
                     if (state.passes.isEmpty()) {
                         item(key = "empty") {
-                            Text("No passes above ${Format.degrees0(state.minElevationDeg)} in the next 10 days.")
+                            Text(
+                                if (state.visibleOnly) {
+                                    "No passes visible to the naked eye in the next 10 days."
+                                } else {
+                                    "No passes above ${Format.degrees0(state.minElevationDeg)} in the next 10 days."
+                                },
+                            )
                         }
                     }
                     byDay.forEach { (date, passes) ->
@@ -229,19 +233,27 @@ private fun NoSatellitesCard(onOpenSatellites: () -> Unit) {
     }
 }
 
-/** "All" plus one chip per tracked satellite. */
+/** "Visible" (naked-eye passes only), plus "All" and one chip per tracked satellite when there are several. */
 @Composable
-private fun FilterChips(state: PassesUiState, onToggle: (Int?) -> Unit) {
+private fun FilterChips(state: PassesUiState, onToggle: (Int?) -> Unit, onToggleVisibleOnly: () -> Unit) {
     val all = state.shown.size == state.tracked.size
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = all, onClick = { onToggle(null) }, label = { Text("All") })
-        state.tracked.forEach { s ->
-            FilterChip(
-                selected = !all && s.noradId in state.shown,
-                onClick = { onToggle(s.noradId) },
-                label = { Text(s.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                leadingIcon = { SatelliteDot(s.noradId, size = 8.dp) },
-            )
+        FilterChip(
+            selected = state.visibleOnly,
+            onClick = onToggleVisibleOnly,
+            label = { Text("Visible") },
+            leadingIcon = { VisibleIcon() },
+        )
+        if (state.tracked.size > 1) {
+            FilterChip(selected = all, onClick = { onToggle(null) }, label = { Text("All") })
+            state.tracked.forEach { s ->
+                FilterChip(
+                    selected = !all && s.noradId in state.shown,
+                    onClick = { onToggle(s.noradId) },
+                    label = { Text(s.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingIcon = { SatelliteDot(s.noradId, size = 8.dp) },
+                )
+            }
         }
     }
 }
@@ -547,7 +559,8 @@ private fun Footer(state: PassesUiState, locationSummary: String) {
         } ?: "–"
         Text(
             withCenteredArrows(
-                "Passes above ${Format.degrees0(state.minElevationDeg)}, 10 days ahead. " +
+                (if (state.visibleOnly) "Passes visible to the naked eye" else "Passes") +
+                    " above ${Format.degrees0(state.minElevationDeg)}, 10 days ahead. " +
                     "Times are rise → highest → set.",
             ),
             style = MaterialTheme.typography.bodySmall,

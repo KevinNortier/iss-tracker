@@ -118,4 +118,15 @@ class SelectPassesTest {
         assertEquals("Passes", passesTitle(listOf(iss, css)))
         assertEquals("Passes", passesTitle(emptyList()))
     }
+
+    @Test
+    fun `visible filter keeps only naked-eye passes of bright satellites`() {
+        val visibleIss = SatPass(iss, pass(0, 10, visible = true))
+        val darkIss = SatPass(iss, pass(90, 100))
+        val sunlitFaint = SatPass(faint, pass(180, 190, visible = true))
+        val passes = listOf(visibleIss, darkIss, sunlitFaint)
+
+        assertEquals(listOf(visibleIss), filterVisible(passes, visibleOnly = true))
+        assertEquals(passes, filterVisible(passes, visibleOnly = false))
+    }
 }
