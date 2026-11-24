@@ -81,8 +81,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         .map { prefs -> prefs[Keys.PASS_VISIBLE_ONLY] ?: false }
         .distinctUntilChanged()
 
-    suspend fun setPassVisibleOnly(visibleOnly: Boolean) {
-        dataStore.edit { it[Keys.PASS_VISIBLE_ONLY] = visibleOnly }
+    /**
+     * Flips [passVisibleOnly]. The flip happens inside the DataStore transaction, so quick repeated taps
+     * each see the previous tap's value instead of all reading the same stale one.
+     */
+    suspend fun togglePassVisibleOnly() {
+        dataStore.edit { it[Keys.PASS_VISIBLE_ONLY] = !(it[Keys.PASS_VISIBLE_ONLY] ?: false) }
     }
 
     val settings: Flow<AppSettings> = dataStore.data

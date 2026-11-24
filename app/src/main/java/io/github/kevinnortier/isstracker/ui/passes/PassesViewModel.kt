@@ -298,9 +298,7 @@ class PassesViewModel(
 
     /** Shows only passes visible to the naked eye, or all passes again. */
     fun toggleVisibleOnly() {
-        viewModelScope.launch {
-            container.settingsRepository.setPassVisibleOnly(!uiState.value.visibleOnly)
-        }
+        viewModelScope.launch { container.settingsRepository.togglePassVisibleOnly() }
     }
 
     init {
