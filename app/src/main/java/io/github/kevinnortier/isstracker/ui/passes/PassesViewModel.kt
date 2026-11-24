@@ -66,6 +66,10 @@ fun effectiveFilter(filter: Set<Int>, tracked: List<Satellite>): Set<Int> {
     return (filter intersect trackedIds).ifEmpty { trackedIds }
 }
 
+/** Only the passes visible to the naked eye when [visibleOnly], otherwise all of them. */
+fun filterVisible(passes: List<SatPass>, visibleOnly: Boolean): List<SatPass> =
+    if (visibleOnly) passes.filter { it.visibleToEye } else passes
+
 /** Passes that haven't ended at a moment, the ones in progress, and the next one to start. */
 data class PassSelection(val upcoming: List<SatPass>, val current: List<SatPass>, val next: SatPass?)
 
@@ -93,6 +97,8 @@ data class PassesUiState(
     val tracked: List<Satellite> = emptyList(),
     /** NORAD IDs currently shown (after the filter). */
     val shown: Set<Int> = emptySet(),
+    /** True when only passes visible to the naked eye are shown. */
+    val visibleOnly: Boolean = false,
     /** Passes of the shown satellites that have not ended yet, in time order. */
     val passes: List<SatPass> = emptyList(),
     /** Passes in progress right now (the first is shown in the card). */
@@ -198,11 +204,19 @@ class PassesViewModel(
         .flowOn(Dispatchers.Default)
         .onStart { emit(Prediction.Waiting) }
 
+    private data class ListInputs(
+        val filter: Set<Int>,
+        val visibleOnly: Boolean,
+        val selected: Set<PassKey>,
+        val failures: Set<Int>,
+    )
+
     private val listInputs = combine(
         container.settingsRepository.passFilter,
+        container.settingsRepository.passVisibleOnly,
         container.settingsRepository.selectedPasses,
         downloadFailures,
-    ) { filter, selected, failures -> Triple(filter, selected, failures) }
+    ) { filter, visibleOnly, selected, failures -> ListInputs(filter, visibleOnly, selected, failures) }
 
     val uiState: StateFlow<PassesUiState> = combine(
         prediction,
@@ -210,13 +224,14 @@ class PassesViewModel(
         tles,
         listInputs,
         secondTicker(clock),
-    ) { prediction, tracked, tles, (filter, selected, failures), now ->
+    ) { prediction, tracked, tles, (filter, visibleOnly, selected, failures), now ->
         val shown = effectiveFilter(filter, tracked)
         val base = PassesUiState(
             title = passesTitle(tracked),
             loading = false,
             tracked = tracked,
             shown = shown,
+            visibleOnly = visibleOnly,
             oldestTleEpoch = tles.filter { it.first.noradId in shown }.mapNotNull { it.second?.epoch }.minOrNull(),
             now = now,
         )
@@ -232,7 +247,7 @@ class PassesViewModel(
                 val withoutData = shownPredictions
                     .filter { it.predictor == null && !stillLoading(it.satellite.noradId) }
                     .map { it.satellite }
-                val merged = mergePasses(shownPredictions.map { it.satellite to it.passes })
+                val merged = filterVisible(mergePasses(shownPredictions.map { it.satellite to it.passes }), visibleOnly)
                 val selection = selectPasses(merged, now)
                 val firstCurrent = selection.current.firstOrNull()
                 base.copy(
@@ -278,6 +293,13 @@ class PassesViewModel(
             // Showing everything (or nothing) is stored as "all".
             val all = state.tracked.map { it.noradId }.toSet()
             container.settingsRepository.setPassFilter(if (newFilter.isEmpty() || newFilter == all) emptySet() else newFilter)
+        }
+    }
+
+    /** Shows only passes visible to the naked eye, or all passes again. */
+    fun toggleVisibleOnly() {
+        viewModelScope.launch {
+            container.settingsRepository.setPassVisibleOnly(!uiState.value.visibleOnly)
         }
     }
 

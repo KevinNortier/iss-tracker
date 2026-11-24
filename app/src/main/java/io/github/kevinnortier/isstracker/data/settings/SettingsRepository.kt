@@ -2,6 +2,7 @@ package io.github.kevinnortier.isstracker.data.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -59,6 +60,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
         /** NORAD IDs shown in the pass list; empty = all tracked satellites. */
         val PASS_FILTER = stringSetPreferencesKey("pass_filter")
+
+        /** True = the pass list only shows passes visible to the naked eye. */
+        val PASS_VISIBLE_ONLY = booleanPreferencesKey("pass_visible_only")
     }
 
     /** NORAD IDs the pass list is filtered to; empty means "all". */
@@ -69,6 +73,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setPassFilter(noradIds: Set<Int>) {
         dataStore.edit { it[Keys.PASS_FILTER] = noradIds.map(Int::toString).toSet() }
+    }
+
+    /** True when the pass list only shows passes visible to the naked eye. */
+    val passVisibleOnly: Flow<Boolean> = dataStore.data
+        .catch { e -> if (e is IOException) emit(emptyPreferences()) else throw e }
+        .map { prefs -> prefs[Keys.PASS_VISIBLE_ONLY] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setPassVisibleOnly(visibleOnly: Boolean) {
+        dataStore.edit { it[Keys.PASS_VISIBLE_ONLY] = visibleOnly }
     }
 
     val settings: Flow<AppSettings> = dataStore.data
